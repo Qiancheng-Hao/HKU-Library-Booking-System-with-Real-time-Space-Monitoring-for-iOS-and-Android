@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+from sqlalchemy import Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.core.database import Base
+
+
+class Library(Base):
+    """Represents a physical library location."""
+
+    __tablename__ = "libraries"
+    __table_args__ = {"comment": "Master list of HKU libraries and their contact info."}
+
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, index=True, comment="Primary key of the library."
+    )
+    name: Mapped[str] = mapped_column(
+        String(255),
+        unique=True,
+        nullable=False,
+        comment="Human readable library name.",
+    )
+    location: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="Physical address or campus location."
+    )
+    description: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Long-form description of facilities or services."
+    )
+
+    facilities = relationship(
+        "Facility",
+        back_populates="library",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    occupancy_snapshots = relationship(
+        "LibraryOccupancySnapshot",
+        back_populates="library",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+    occupancy_stats = relationship(
+        "LibraryOccupancyStatistic",
+        back_populates="library",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+
