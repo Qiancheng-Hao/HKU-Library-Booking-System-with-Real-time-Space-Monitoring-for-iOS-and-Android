@@ -1,34 +1,32 @@
 # HKU Library Booking Backend
 
-后端采用 **FastAPI + PostgreSQL + SQLAlchemy**，当前完成：
+Backend service powered by **FastAPI + PostgreSQL + SQLAlchemy**. The current scope includes:
 
-- 图书馆与设施的建模及建表（包含未来座位占用率相关表）
-- 图书馆列表与详情（含设施信息）接口
-- 设施日程查询（按时间段展示预约状态）
-- 设施预约与取消预约接口
+- Data modeling and table creation for libraries, facilities, users, reservations, and occupancy tracking.
+- Library listing/detail APIs (with facility information).
+- Facility schedule lookup that shows availability slot-by-slot.
+- Reservation creation and cancellation flows.
 
-座位实时占用率模块已完成数据库设计，后续可在此基础上补充数据采集与接口。
+Database support for the future real-time occupancy module is already in place; only data ingestion and APIs need to be added later.
 
-## 目录结构
+## Project Structure
 
 ```
 backend/
   app/
-    core/        # 配置、数据库连接
-    models/      # SQLAlchemy ORM 模型
-    routers/     # FastAPI 路由
-    schemas/     # Pydantic 响应/请求模型
-    services/    # 业务逻辑
-    main.py      # FastAPI 入口
-  scripts/
-    seed_data.py # 示例数据脚本
+    core/        # Settings and database connection helpers
+    models/      # SQLAlchemy ORM models
+    routers/     # FastAPI routers
+    schemas/     # Pydantic request/response models
+    services/    # Domain logic
+    main.py      # FastAPI entry point
   requirements.txt
   env.example
 ```
 
-## 环境准备
+## Getting Started
 
-1. 创建虚拟环境并安装依赖
+1. **Create a virtual environment and install dependencies**
 
    ```bash
    cd backend
@@ -37,48 +35,48 @@ backend/
    pip install -r requirements.txt
    ```
 
-2. 配置数据库
+2. **Configure PostgreSQL**
 
-   - 在 PostgreSQL 中创建数据库（默认名称 `hku_library`）。
-   - 复制 `backend/env.example` 为 `backend/.env` 并按需修改 `DATABASE_URL`。
+   - Create a database (default name `hku_library`).
+   - Copy `backend/env.example` to `backend/.env` and update `DATABASE_URL` with your credentials.
 
-3. 运行开发服务器
+3. **Run the development server**
 
    ```bash
    uvicorn app.main:app --reload --app-dir backend
    ```
 
-   API 文档：<http://127.0.0.1:8000/docs>
+   API docs: <http://127.0.0.1:8000/docs>
 
-4. （可选）导入示例数据
+4. **(Optional) Seed demo data**
 
    ```bash
    cd backend
    python -m scripts.seed_data
    ```
 
-## 主要数据表
+## Core Tables
 
-| 表名 | 说明 |
-| ---- | ---- |
-| `libraries` | 图书馆基础信息 |
-| `facilities` | 可预约设施（自习室、座位等） |
-| `users` | 预约用户信息（按邮箱唯一） |
-| `reservations` | 预约记录，含状态、时间段 |
-| `library_occupancy_snapshots` | 座位实时占用快照 |
-| `library_occupancy_statistics` | 周期占用率统计（小时/天/周） |
+| Table | Description |
+| ----- | ----------- |
+| `libraries` | Library metadata (name, location, description). |
+| `facilities` | Reservable resources inside libraries (rooms, seats, devices). |
+| `users` | End users identified by unique email. |
+| `reservations` | Bookings with time slots and status. |
+| `library_occupancy_snapshots` | Near real-time seat utilization samples. |
+| `library_occupancy_statistics` | Aggregated occupancy metrics (hour/day/week). |
 
-## 已实现 API（`/api/v1` 前缀）
+## Available APIs (`/api/v1` prefix)
 
-| 方法 | 路径 | 功能 |
-| ---- | ---- | ---- |
-| GET | `/libraries` | 图书馆列表（含设施数量） |
-| GET | `/libraries/{id}` | 图书馆详情与设施信息 |
-| GET | `/facilities/{id}/timeslots?date=YYYY-MM-DD` | 指定日期全部时间段及预约状态 |
-| POST | `/reservations` | 提交预约（自动创建/更新用户信息） |
-| DELETE | `/reservations/{uuid}` | 取消预约 |
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/libraries` | List libraries including facility counts. |
+| GET | `/libraries/{id}` | Library detail plus facilities. |
+| GET | `/facilities/{id}/timeslots?date=YYYY-MM-DD` | Availability timeline for a facility on a given date. |
+| POST | `/reservations` | Create a reservation (auto-creates/updates user profiles). |
+| DELETE | `/reservations/{uuid}` | Cancel an existing reservation. |
 
-示例预约请求：
+**Sample reservation payload**
 
 ```json
 {
@@ -92,10 +90,8 @@ backend/
 }
 ```
 
-## 后续计划（座位占用率模块）
+## Next Steps (Occupancy Module)
 
-- 编写定时任务或实时采集服务，将每 5 分钟的座位使用情况写入 `library_occupancy_snapshots`
-- 基于快照生成周期性统计（小时 / 天 / 周），落库到 `library_occupancy_statistics`
-- 对外提供实时与历史占用率查询接口
-
-完成以上步骤后，即可支持移动端实时查看座位情况及趋势。需要更多帮助时可继续提出具体需求。*** End Patch
+- Build a scheduler or ingestion service that records seat usage every five minutes into `library_occupancy_snapshots`.
+- Aggregate snapshots into hourly/daily/weekly stats inside `library_occupancy_statistics`.
+- Expose public APIs for real-time occupancy and historical trends.
