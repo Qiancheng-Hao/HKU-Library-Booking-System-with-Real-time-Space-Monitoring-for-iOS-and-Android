@@ -6,22 +6,13 @@ import json
 from pathlib import Path
 import torch
 import os # os 
+import logging
 
 class SeatOccupancyDetector:
     """
     Seat Occupancy Detector
-
-    - Occupancy Model: 
-      Used for adjacency logic (person, hogging_item)
-    - Seat Model: 
-      Used to detect total seat count (seat)
     """
-    
-    def __init__(self, 
-                 occupancy_model_path: str, 
-                 seat_model_path: str, 
-                 debug_mode: bool = False, 
-                 device: str = 'auto'):
+    def __init__(self, occupancy_model_path: str, seat_model_path: str, debug_mode: bool = False, device: str = 'auto') -> None:
         """
         Initialize the SeatOccupancyDetector with two models.
         Args:
@@ -30,36 +21,35 @@ class SeatOccupancyDetector:
             debug_mode (bool): Whether to enable debug mode
             device (str): Device to run on ('auto', 'cpu', 'cuda', '0', etc.)
         """
-        # Device auto-detection
         if device == 'auto':
-            # If device support cuda, use GPU
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
         self.device = device
         self.debug_mode = debug_mode
-
-        # Load Model 1: Occupancy Model (for adjacency logic)
         self.occupancy_model = YOLO(occupancy_model_path)
-
-        # Load Model 2: Seat Model (for total count)
         self.seat_model = YOLO(seat_model_path)
 
         # Debug mode: Show model information
         if debug_mode:
-            print(f"--------------------")
-            print(f"All models loaded successfully! Running on: {self.device}")
-            print(f"\n--- Occupancy Model Information ({occupancy_model_path}) ---")
-            print(f"  - Classes: {self.occupancy_model.names}")
-            print(f"\n--- Seat Model Information ({seat_model_path}) ---")
-            print(f"  - Classes: {self.seat_model.names}")
-            print(f"--------------------")
-
+            logging.info(f"--------------------")
+            logging.info(f"All models loaded successfully! Running on: {self.device}")
+            logging.info(f"\n--- Occupancy Model Information ({occupancy_model_path}) ---")
+            logging.info(f"  - Classes: {self.occupancy_model.names}")
+            logging.info(f"\n--- Seat Model Information ({seat_model_path}) ---")
+            logging.info(f"  - Classes: {self.seat_model.names}")
+            logging.info(f"--------------------") 
 
     def preprocess_image(self, image: np.ndarray) -> np.ndarray:
         """
-        Image preprocessing (optional)
-        Use CLAHE (Contrast Limited Adaptive Histogram Equalization) to improve lighting
+        Image preprocessing (optional) \n
+        Use CLAHE (Contrast Limited Adaptive Histogram Equalization) to improve lighting 
+        Args:
+            image (np.ndarray): Input image in BGR format
+        Returns:
+            np.ndarray: Preprocessed image
         """
+        # !!! need to use more advanced preprocessing later !!!
+        # can detect the image quality first and then decide which preprocessing to apply
+        # call different preprocessing function for different scenarios (e.g., low light, glare, shadows, etc.)
         lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
         l, a, b = cv2.split(lab)
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
@@ -68,17 +58,27 @@ class SeatOccupancyDetector:
         enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
         return enhanced
     
-    
     # Utility Functions
     @staticmethod 
     def get_box_center(box: List[float]) -> Tuple[float, float]:
-        """Calculate the center point of a bounding box"""
+        """Calculate the center point of a bounding box
+        Args:
+            box (List[float]): Bounding box in format [x1, y1, x2, y2]
+        Returns:
+            Tuple[float, float]: (center_x, center_y)
+        """
         x1, y1, x2, y2 = box
         return (x1 + x2) / 2, (y1 + y2) / 2
 
     @staticmethod
     def get_distance(point1: Tuple[float, float], point2: Tuple[float, float]) -> float:
-        """Calculate the Euclidean distance between two points"""
+        """Calculate the Euclidean distance between two points
+        Args:
+            point1 (Tuple[float, float]): (x1, y1)
+            point2 (Tuple[float, float]): (x2, y2)
+        Returns:
+            float: Euclidean distance
+        """
         return np.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
     
     @staticmethod
@@ -91,13 +91,12 @@ class SeatOccupancyDetector:
             box1, box2: Bounding boxes in format [x1, y1, x2, y2]
                         where (x1, y1) is the top-left corner
                         and (x2, y2) is the bottom-right corner.
-            
         Returns:
             IoU value, a float between 0.0 (no overlap) and 1.0 (perfect overlap)
         """
         # Unpack the coordinates for both boxes
         x1_1, y1_1, x2_1, y2_1 = box1 # left top (x1,y1) → right bottom (x2,y2)
-        x1_2, y1_2, x2_2, y2_2 = box2
+        x1_2, y1_2, x2_2, y2_2 = box2 # same with above 
         
         # Calculate intersection area
         x1_i = max(x1_1, x1_2)  # Find the top-left corner (x1, y1) of the intersection area
@@ -150,15 +149,13 @@ class SeatOccupancyDetector:
             x2 += x_expand  # Move right edge right
             y1 -= y_expand  # Move top edge up
             y2 += y_expand  # Move bottom edge down
-
+            
         px, py = point
         return x1 <= px <= x2 and y1 <= py <= y2
 
-    # Clustering Function
     def cluster_items(self, item_boxes: List, item_cluster_threshold: float) -> List[List]:
         """
         Cluster items that are close together
-        
         Args:
             item_boxes: List of item bounding boxes
             item_cluster_threshold: Distance threshold for clustering items together
@@ -184,7 +181,6 @@ class SeatOccupancyDetector:
                 # skip if already merged
                 if i in used:
                     continue
-                       
                 current_cluster = clusters[i]
                 merged_cluster = current_cluster.copy()
                 
@@ -216,18 +212,12 @@ class SeatOccupancyDetector:
             clusters = new_clusters
         
         if self.debug_mode:
-            print(f"  [Clustering] {len(item_boxes)} items -> {len(clusters)} clusters")
+            logging.info(f"  [Clustering] {len(item_boxes)} items -> {len(clusters)} clusters")
         
         return clusters
     
     # Spatial Filtering Function
-    def filter_clusters_on_seats(
-        self, 
-        item_clusters: List[List], 
-        seat_boxes: List,
-        iou_threshold: float = 0.0,
-        expansion_factor: float = 2
-    ) -> Tuple[List[List], List[List]]:
+    def filter_clusters_on_seats(self, item_clusters: List[List], seat_boxes: List, iou_threshold: float = 0.0,expansion_factor: float = 1.0) -> Tuple[List[List], List[List]]:
         """
         Filter item clusters based on whether they are on seats
         
@@ -235,8 +225,7 @@ class SeatOccupancyDetector:
             item_clusters: List of item clusters (each cluster is a list of boxes)
             seat_boxes: List of seat bounding boxes
             iou_threshold: Minimum IoU to consider overlap (0.0 = any overlap)
-            expansion_factor: Factor to expand seat boxes to cover desk area
-                              (1.0 = chair only, 1.5 = chair + surrounding desk area)
+            expansion_factor: Factor to expand seat boxes to cover desk area (1.0 = chair only, 1.5 = chair + surrounding desk area)
         
         Returns:
             Tuple of (clusters_on_seats, clusters_off_seats)
@@ -283,7 +272,6 @@ class SeatOccupancyDetector:
         
         return clusters_on_seats, clusters_off_seats
 
-    # Visualization Functions (For testing and visualize only)
     def visualize_detections(
         self, 
         image: np.ndarray, 
@@ -379,7 +367,7 @@ class SeatOccupancyDetector:
             
         cv2.imwrite(save_path, vis_img)
         if self.debug_mode:
-            print(f" Visualization result saved to: {save_path}")
+            logging.info(f" Visualization result saved to: {save_path}")
 
     # Occupancy Detection with Seat Filtering
     def get_occupancy_stats_with_seats(
@@ -421,20 +409,19 @@ class SeatOccupancyDetector:
         Only items that are physically on/near seats are counted as hogging.
         
         Args:
-            seat_expansion_factor: How much to expand seat bbox to cover desk area
-                                   (1.0 = chair only, 1.5 = chair + desk, 2.0 = larger area)
+            seat_expansion_factor: How much to expand seat bbox to cover desk area (1.0 = chair only, 1.5 = chair + desk, 2.0 = larger area)
             seat_imgsz: Image size for seat detection (can be smaller for speed)
         
         Returns:
             Dict with occupancy stats (only counting items on seats)
         """
-        # Preprocessing (optional)
+        # Preprocessing (optional but strongly recommended)
         if use_preprocessing:
-            if self.debug_mode: print(" Applying image preprocessing...")
+            if self.debug_mode: logging.info("Applying image preprocessing...")
             image = self.preprocess_image(image)
         
         # Run Occupancy Model (persons + items)
-        if self.debug_mode: print("  > Running Occupancy Model...")
+        if self.debug_mode: logging.info("Running Occupancy Model...")
         occupancy_results = self.occupancy_model(image, verbose=False, imgsz=imgsz, device=self.device)
         occupancy_detections = occupancy_results[0].boxes
         
@@ -542,11 +529,9 @@ class SeatOccupancyDetector:
         }
         
         if self.debug_mode:
-            print(f"  [Final Stats] Occupancy: {total_occupancy} = {person_count} persons + {hogging_region_count} hogging regions")
-        
+            logging.info(f"  [Final Stats] Occupancy: {total_occupancy} = {person_count} persons + {hogging_region_count} hogging regions")
         return stats
 
-    # Count Total Seats (Daily Calibration)
     def count_total_seats(
         self,
         image: np.ndarray,
