@@ -5,12 +5,13 @@ from typing import Dict, List, Tuple
 import json
 from pathlib import Path
 import torch
-import os # os 
+import os 
 import logging
+import time
 
 class SeatOccupancyDetector:
     """
-    Seat Occupancy Detector
+    Seat Occupancy Detector, main class handlingg occupancy detection. 
     """
     def __init__(self, occupancy_model_path: str, seat_model_path: str, debug_mode: bool = False, device: str = 'auto') -> None:
         """
@@ -40,8 +41,8 @@ class SeatOccupancyDetector:
 
     def preprocess_image(self, image: np.ndarray) -> np.ndarray:
         """
-        Image preprocessing (optional) \n
-        Use CLAHE (Contrast Limited Adaptive Histogram Equalization) to improve lighting 
+        Image preprocessing function entrance \n
+        It will first identify the current image quality, then apply suitable preprocessing techniques.
         Args:
             image (np.ndarray): Input image in BGR format
         Returns:
@@ -65,7 +66,7 @@ class SeatOccupancyDetector:
         Args:
             box (List[float]): Bounding box in format [x1, y1, x2, y2]
         Returns:
-            Tuple[float, float]: (center_x, center_y)
+            Tuple [float, float]: (center_x, center_y)
         """
         x1, y1, x2, y2 = box
         return (x1 + x2) / 2, (y1 + y2) / 2
@@ -217,60 +218,52 @@ class SeatOccupancyDetector:
         return clusters
     
     # Spatial Filtering Function
-    def filter_clusters_on_seats(self, item_clusters: List[List], seat_boxes: List, iou_threshold: float = 0.0,expansion_factor: float = 1.0) -> Tuple[List[List], List[List]]:
+    def filter_items_on_seats(self, item_boxes: List, seat_boxes: List, iou_threshold: float = 0.0, expansion_factor: float = 1.0) -> Tuple[List, List]:
         """
-        Filter item clusters based on whether they are on seats
+        Filter items based on whether they are on seats
         
         Args:
-            item_clusters: List of item clusters (each cluster is a list of boxes)
+            item_boxes: List of item bounding boxes
             seat_boxes: List of seat bounding boxes
             iou_threshold: Minimum IoU to consider overlap (0.0 = any overlap)
             expansion_factor: Factor to expand seat boxes to cover desk area (1.0 = chair only, 1.5 = chair + surrounding desk area)
         
         Returns:
-            Tuple of (clusters_on_seats, clusters_off_seats)
+            Tuple of (items_on_seats, items_off_seats)
         """
         if len(seat_boxes) == 0:
-            # No seats detected, return all clusters as off-seats
-            return [], item_clusters
+            # No seats detected, return all items as off-seats
+            return [], item_boxes
         
-        clusters_on_seats = []
-        clusters_off_seats = []
+        items_on_seats = []
+        items_off_seats = []
         
-        for cluster in item_clusters:
+        for item_box in item_boxes:
             is_on_seat = False # Assume not on seat
+            item_center = self.get_box_center(item_box)
             
-            # Check if any item in the cluster is associated with any seat
-            for item_box in cluster:
-                item_center = self.get_box_center(item_box)
+            for seat_box in seat_boxes:
+                # Method 1: Check if item overlaps with seat (using IoU)
+                iou = self.calculate_iou(item_box, seat_box)
+                if iou > iou_threshold:
+                    is_on_seat = True
+                    break
                 
-                for seat_box in seat_boxes:
-                    # Method 1: Check if item overlaps with seat (using IoU)
-                    iou = self.calculate_iou(item_box, seat_box)
-                    if iou > iou_threshold:
-                        is_on_seat = True
-                        break
-                    
-                    # Method 2: Check if item center is within expanded seat area (This covers items on desk near the chair)
-                    if self.is_point_in_box(item_center, seat_box, expansion_factor):
-                        is_on_seat = True
-                        break
-                
-                if is_on_seat:
+                # Method 2: Check if item center is within expanded seat area (This covers items on desk near the chair)
+                if self.is_point_in_box(item_center, seat_box, expansion_factor):
+                    is_on_seat = True
                     break
             
             if is_on_seat:
-                clusters_on_seats.append(cluster)
+                items_on_seats.append(item_box)
             else:
-                clusters_off_seats.append(cluster)
+                items_off_seats.append(item_box)
         
         if self.debug_mode:
-            total_items_on = sum(len(c) for c in clusters_on_seats)
-            total_items_off = sum(len(c) for c in clusters_off_seats)
-            print(f"  [Spatial Filter] On seats: {len(clusters_on_seats)} clusters ({total_items_on} items)")
-            print(f"  [Spatial Filter] Off seats: {len(clusters_off_seats)} clusters ({total_items_off} items)")
+            logging.info(f"  [Spatial Filter] On seats: {len(items_on_seats)} items")
+            logging.info(f"  [Spatial Filter] Off seats: {len(items_off_seats)} items")
         
-        return clusters_on_seats, clusters_off_seats
+        return items_on_seats, items_off_seats
 
     def visualize_detections(
         self, 
@@ -282,7 +275,7 @@ class SeatOccupancyDetector:
         seats: List,
         save_path: str = "debug_output.jpg",
         total_occupancy: int = 0
-    ):
+    ) -> None:
         """
         Visualization (Occupancy Model)
         - Persons (Green)
@@ -392,12 +385,14 @@ class SeatOccupancyDetector:
         confidence_threshold: float = 0.5,
         proximity_threshold: float = 100.0,
         item_cluster_threshold: float = 150.0,
-        seat_expansion_factor: float = 3,
+        seat_expansion_factor: float = 1.5,
         use_preprocessing: bool = False,
         visualize: bool = False,
         output_path: str = "detection_result.jpg",
         imgsz: int = 640,
-        seat_imgsz: int = 640
+        seat_imgsz: int = 640,
+        location: str = "",
+        area: str = ""
     ) -> Dict:
         """
         Function 1+ (Advanced): Analyze image with seat-based spatial filtering
@@ -411,6 +406,8 @@ class SeatOccupancyDetector:
         Args:
             seat_expansion_factor: How much to expand seat bbox to cover desk area (1.0 = chair only, 1.5 = chair + desk, 2.0 = larger area)
             seat_imgsz: Image size for seat detection (can be smaller for speed)
+            location: Location identifier for the image
+            area: Area identifier within the location
         
         Returns:
             Dict with occupancy stats (only counting items on seats)
@@ -479,19 +476,19 @@ class SeatOccupancyDetector:
             else:
                 lone_items.append(item_box)
         
-        # Cluster lone items
-        lone_item_clusters = self.cluster_items(lone_items, item_cluster_threshold)
-        
-        # Filter lone items clusters based on seat positions
-        clusters_on_seats, clusters_off_seats = self.filter_clusters_on_seats(
-            lone_item_clusters,
+        # Filter lone items based on seat positions
+        items_on_seats, items_off_seats = self.filter_items_on_seats(
+            lone_items,
             seat_boxes,
             expansion_factor=seat_expansion_factor
         )
         
+        # Cluster items that are on seats
+        hogging_item_clusters = self.cluster_items(items_on_seats, item_cluster_threshold)
+        
         # Calculate totals (only count items ON seats)
         person_count = len(persons_boxes)
-        hogging_region_count = len(clusters_on_seats)  # Only clusters on seats
+        hogging_region_count = len(hogging_item_clusters)  # Only clusters on seats
         total_occupancy = person_count + hogging_region_count
         
         # Visualization (if needed)
@@ -499,9 +496,9 @@ class SeatOccupancyDetector:
             self.visualize_detections(
                 image, 
                 persons_boxes, 
-                clusters_on_seats,      # Red: Counted
+                hogging_item_clusters,      # Red: Counted
                 associated_items,       
-                ignored_clusters=clusters_off_seats,  # Yellow: Ignored
+                ignored_clusters=items_off_seats,  # Yellow: Ignored
                 seats=seat_boxes,       # Cyan: Reference
                 save_path=output_path,
                 total_occupancy=total_occupancy
@@ -509,23 +506,27 @@ class SeatOccupancyDetector:
 
         # Return results
         stats = {
-            "total_occupancy_count": total_occupancy,
-            "person_count": person_count,
-            "hogging_region_count": hogging_region_count,
-            "total_lone_items_on_seats": sum(len(c) for c in clusters_on_seats),
-            "total_lone_items_off_seats": sum(len(c) for c in clusters_off_seats),
-            "clusters_ignored": len(clusters_off_seats),
-            "hogging_item_count_associated": len(associated_items),
-            "total_items_detected": len(objects_boxes),
-            "seats_detected": len(seat_boxes),
-            "thresholds_used": {
-                "confidence": confidence_threshold,
-                "proximity_pixels": proximity_threshold,
-                "item_cluster_pixels": item_cluster_threshold,
-                "seat_expansion_factor": seat_expansion_factor,
-                "image_size": imgsz,
-                "seat_image_size": seat_imgsz
-            }
+            "time_stamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            "location": location,
+            "area": area,
+           # "total_occupancy": total_occupancy,
+            "total_number_of_person": person_count,
+            "total_number_of_hogging_items": hogging_region_count,
+            #"total_lone_items_on_seats": len(items_on_seats),
+            #"total_lone_items_off_seats": len(items_off_seats),
+            #"items_ignored_off_seats": len(items_off_seats), # New stat for items filtered out
+            #"hogging_item_count_associated": len(associated_items),
+            #"total_items_detected": len(objects_boxes),
+            "total_number_of_seats": len(seat_boxes),
+            "occupancy_rate": (person_count + hogging_region_count) / len(seat_boxes) if len(seat_boxes) > 0 else -1.0,
+            # "thresholds_used": {
+            #     "confidence": confidence_threshold,
+            #     "proximity_pixels": proximity_threshold,
+            #     "item_cluster_pixels": item_cluster_threshold,
+            #     "seat_expansion_factor": seat_expansion_factor,
+            #     "image_size": imgsz,
+            #     "seat_image_size": seat_imgz
+            # }
         }
         
         if self.debug_mode:
@@ -594,8 +595,8 @@ class SeatOccupancyDetector:
         # Return results
         stats = {
             "total_seat_count": seat_count,
-            "confidence_threshold": confidence_threshold,
-            "image_size": imgsz
+            # "confidence_threshold": confidence_threshold,
+            # "image_size": imgsz
         }
         
         return stats

@@ -13,10 +13,10 @@ from pathlib import Path
 #v Settings
 # ==============================
 current_path = os.path.abspath(__file__)
-DATASET_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_path)))), "person_and_item_dataset")
+DATASET_ROOT = os.path.join(os.path.dirname(current_path), "fyp", "person_and_item", "dataset")
 DATA_YAML = os.path.join(DATASET_ROOT, "data.yaml")
-PROJECT_DIR = os.path.join(os.path.dirname(os.path.dirname(current_path)), "models")
-CHECKPOINT_NAME = "person_and_item"
+PROJECT_DIR = os.path.join(os.path.dirname(current_path), "fyp", "person_and_item")
+CHECKPOINT_NAME = "result"
 
 # ==============================
 #v Checkpoint Detection
