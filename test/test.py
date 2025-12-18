@@ -77,7 +77,9 @@ def test_model(image_files: list[str], person_class_id, hogging_item_class_id, s
             visualize=True,
             output_path=output_path_adv,
             imgsz=IMAGE_SIZE,
-            seat_imgsz=SEAT_IMAGE_SIZE 
+            seat_imgsz=SEAT_IMAGE_SIZE,
+            location="main_library", 
+            area="3/F Old Wing"
         )
 
     
