@@ -1,11 +1,14 @@
-import cv2
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+import torch
+import cv2
 import glob
 import time
-import torch
 import traceback
 import sys
-from seat_occupancy_detector import SeatOccupancyDetector
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from core.seat_occupancy_detector import SeatOccupancyDetector
+import time
 
 
 def get_all_image() -> list[str]:
@@ -49,9 +52,8 @@ def test_model(image_files: list[str], person_class_id, hogging_item_class_id, s
         image = cv2.imread(image_path)  # load the image and change to np.ndarray format
         
         # Call seat counting function
-        start_time_seat = time.time()
         output_path_seat = os.path.join(RESULT_FOLDER_SEATS, base_name)
-        stats_seat = detector.count_total_seats(
+        detector.count_total_seats(
             image,
             seat_class_id=seat_class_id,
             confidence_threshold=CONFIDENCE_THRESHOLD,
@@ -61,11 +63,10 @@ def test_model(image_files: list[str], person_class_id, hogging_item_class_id, s
         )
         
         # Call Occupancy model 
-        start_time_adv = time.time()
         image_adv = image.copy() 
         output_path_adv = os.path.join(RESULT_FOLDER_OCCUPANCY, base_name)
         
-        stats_adv = detector.get_occupancy_stats_with_seats(
+        result = detector.get_occupancy_stats_with_seats(
             image_adv,
             person_class_id=person_class_id,
             hogging_item_class_id=hogging_item_class_id,
@@ -81,6 +82,7 @@ def test_model(image_files: list[str], person_class_id, hogging_item_class_id, s
             location="main_library", 
             area="3/F Old Wing"
         )
+        print(result)
 
     
 if __name__ == "__main__":
@@ -89,10 +91,10 @@ if __name__ == "__main__":
     """
 
     # Initialize all shared and global parameters
-    SEAT_MODEL_PATH = "yolo11l.pt" 
-    TEST_FOLDER = "Test"
-    RESULT_FOLDER_OCCUPANCY = "Result_Occupancy"
-    RESULT_FOLDER_SEATS = "Result_Seats"
+    SEAT_MODEL_PATH = "../yolo11l.pt" 
+    TEST_FOLDER = "data"
+    RESULT_FOLDER_OCCUPANCY = "standard_model_results"
+    RESULT_FOLDER_SEATS = "standard_model_seats_results"
     
     PROXIMITY_THRESHOLD = 150.0  # Distance for person-item association
     ITEM_CLUSTER_THRESHOLD = 70.0 # Distance for item-item clustering
@@ -142,35 +144,42 @@ if __name__ == "__main__":
                 63, # laptop
                 64, # mouse
                 66, # keyboard
-                67, # Phone
+                67, # cell phone
                 73, # book 
                 76  # scissors
             ]
-            SEAT_CLASS_ID = [56, 57]         # chair and sofa
-            OCCUPANCY_MODEL_PATH = "yolo11l.pt"
+            SEAT_CLASS_ID = [56, 57]         # chair and couch
+            OCCUPANCY_MODEL_PATH = "../yolo11l.pt"
             test_model(image_files, PERSON_CLASS_ID, HOGGING_ITEM_CLASS_ID, SEAT_CLASS_ID)
 
             print("\n" + "=" * 80)
             print("Finished Standard YOLO Model Testing")
             print("=" * 80)
-            
-            # wait for user input before testing self-trained model
             input("\nPress Enter to continue to self-trained model testing...")
 
+            RESULT_FOLDER_OCCUPANCY = "self-trained_model_results"
+            RESULT_FOLDER_SEATS = "self-trained_model_seats_results"
+            os.makedirs(RESULT_FOLDER_OCCUPANCY, exist_ok=True)
+            os.makedirs(RESULT_FOLDER_SEATS, exist_ok=True)
+            
             # Testing the self-trained model
-            PERSON_CLASS_ID = 30
-            HOGGING_ITEM_CLASS_ID = list(range(30)) # hogging_item
+            # v1: 30, v2:23
+            PERSON_CLASS_ID = 23
+            # v1: 0-29, v2: 0-22
+            HOGGING_ITEM_CLASS_ID = list(range(23)) # hogging_item
             SEAT_CLASS_ID = [56, 57]         # seat and sofa
-            SEAT_MODEL_PATH = os.path.join("models", "chair_and_sofa", "best.pt")
-            OCCUPANCY_MODEL_PATH = os.path.join("models", "person_and_item", "best.pt")
+            # SEAT_MODEL_PATH = os.path.join("..", "models", "chair_and_sofa", "best.pt")
+            OCCUPANCY_MODEL_PATH = os.path.join("..", "models", "person_and_item", "v2", "best.pt")
             if not os.path.exists(OCCUPANCY_MODEL_PATH):
                 raise FileNotFoundError(f"Self-trained model not found at path: {OCCUPANCY_MODEL_PATH}")
             print("\n" + "=" * 80)
             print("Testing Self-Trained Model")
             print("=" * 80)
+            current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            print("Start Time:", current_time)
             test_model(image_files, PERSON_CLASS_ID, HOGGING_ITEM_CLASS_ID, SEAT_CLASS_ID)
-            
-            # wait for user input before exiting
+            finished_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            print("Finished Time:", finished_time)
             print("\n" + "=" * 80)
             print("Finished Self-Trained Model Testing")
             print("=" * 80)

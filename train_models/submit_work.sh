@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=person_item_train
-#SBATCH --output=/userhome/cs/u3606584/fyp/person_and_item/logs/person_and_item_%j.log
-#SBATCH --error=/userhome/cs/u3606584/fyp/person_and_item/logs/person_and_item_%j.err
+#SBATCH --job-name=chair_and_sofa_train
+#SBATCH --output=/userhome/cs/u3606584/fyp/chair_and_sofa/logs/chair_and_sofa_%j.log
+#SBATCH --error=/userhome/cs/u3606584/fyp/chair_and_sofa/logs/chair_and_sofa_%j.err
 #SBATCH --time=30:00:00
 #SBATCH -p batch
 #SBATCH --gres=gpu:1
@@ -24,10 +24,10 @@ nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv
 
 cd ~
 
-mkdir -p ~/fyp/person_and_item/logs
+mkdir -p ~/fyp/chair_and_sofa/logs
 
 echo "🚀 Starting python script..."
-python train_person_and_item.py
+python train_seat_model.py
 
 echo "=========================================="
 echo "End time: $(date)"

@@ -118,14 +118,12 @@ class SeatOccupancyDetector:
         
         # Calculate union area
         union = area1 + area2 - intersection
-        
         return intersection / union if union > 0 else 0.0
     
     @staticmethod
     def is_point_in_box(point: Tuple[float, float], box: List[float], expansion_factor: float = 1.0) -> bool:
         """
         Check if a point is inside a bounding box (with optional expansion)
-        
         Args:
             point: (x, y) coordinates
             box: Bounding box [x1, y1, x2, y2]
@@ -160,7 +158,6 @@ class SeatOccupancyDetector:
         Args:
             item_boxes: List of item bounding boxes
             item_cluster_threshold: Distance threshold for clustering items together
-            
         Returns:
             List of item clusters, where each cluster is a list of boxes
         """
@@ -176,9 +173,7 @@ class SeatOccupancyDetector:
             merged = False # Assume no merges this round
             new_clusters = []
             used = set() # Track which clusters have been merged
-            
             for i in range(len(clusters)):
-                
                 # skip if already merged
                 if i in used:
                     continue
@@ -221,7 +216,6 @@ class SeatOccupancyDetector:
     def filter_items_on_seats(self, item_boxes: List, seat_boxes: List, iou_threshold: float = 0.0, expansion_factor: float = 1.0) -> Tuple[List, List]:
         """
         Filter items based on whether they are on seats
-        
         Args:
             item_boxes: List of item bounding boxes
             seat_boxes: List of seat bounding boxes
@@ -493,12 +487,15 @@ class SeatOccupancyDetector:
         
         # Visualization (if needed)
         if visualize:
+            # Convert items_off_seats to cluster format (list of lists)
+            ignored_clusters = [items_off_seats] if items_off_seats else []
+            
             self.visualize_detections(
                 image, 
                 persons_boxes, 
                 hogging_item_clusters,      # Red: Counted
                 associated_items,       
-                ignored_clusters=items_off_seats,  # Yellow: Ignored
+                ignored_clusters=ignored_clusters,  # Yellow: Ignored
                 seats=seat_boxes,       # Cyan: Reference
                 save_path=output_path,
                 total_occupancy=total_occupancy
