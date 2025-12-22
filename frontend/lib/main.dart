@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'services/api_service.dart';
+import 'screens/library_list_screen.dart';
+import 'screens/settings_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -65,11 +67,11 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           NavigationDestination(
             icon: Icon(Icons.chat_bubble, size: 40),
-            label: 'Settings',
+            label: 'Booking',
           ),
           NavigationDestination(
             icon: Icon(Icons.menu_book_rounded, size: 40),
-            label: 'Settings',
+            label: 'Libraries',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_sharp, size: 40),
@@ -84,114 +86,10 @@ class _SettingsPageState extends State<SettingsPage> {
           });
         },
       ),
-      body: currentIndex == 3
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: <Widget>[
-                  Container(
-                    margin: EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
-                    height: 100,
-                    width: 350,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(10.0),
-                      border: Border.all(color: Colors.deepPurple, width: 2.0),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Setting',
-                        style: TextStyle(
-                          color: Colors.deepPurple,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    margin: EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
-                    height: 100,
-                    width: 350,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(10.0),
-                      border: Border.all(color: Colors.deepPurple, width: 2.0),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Privacy Policy',
-                        style: TextStyle(
-                          color: Colors.deepPurple,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    margin: EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
-                    height: 100,
-                    width: 350,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(10.0),
-                      border: Border.all(color: Colors.deepPurple, width: 2.0),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Contact Us',
-                        style: TextStyle(
-                          color: Colors.deepPurple,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    margin: EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
-                    height: 100,
-                    width: 350,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(10.0),
-                      border: Border.all(color: Colors.deepPurple, width: 2.0),
-                    ),
-                    child: Center(
-                      child: Text(
-                        '...',
-                        style: TextStyle(
-                          color: Colors.deepPurple,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    margin: EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
-                    height: 100,
-                    width: 350,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(10.0),
-                      border: Border.all(color: Colors.deepPurple, width: 2.0),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'logout',
-                        style: TextStyle(
-                          color: Colors.deepPurple,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )
+      body: currentIndex == 2
+          ? const LibraryListScreen()
+          : currentIndex == 3
+          ? const SettingsScreen()
           : Center(child: Text('Page ${currentIndex + 1}')),
     );
   }
