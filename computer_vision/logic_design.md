@@ -2,8 +2,9 @@ Computeer  vision part workflow: *https://excalidraw.com/#room=2023ca780dab0dde8
 
 Todo List:
 
-1. update preprocessing function (multiple method to handle different image)
+1. update preprocessing function (None)
 2. update return data (finished)
 3. update logic design (finished)
-4. Train the custom models
+4. Train the custom models (v2 finished)
 5. Whether we really need 2 different models????
+6. collect the data from university (later)
