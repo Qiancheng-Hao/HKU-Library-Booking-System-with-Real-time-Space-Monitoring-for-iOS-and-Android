@@ -49,6 +49,7 @@ class ReservationListResponse(BaseModel):
 class TimeSlotStatus(str, enum.Enum):
     available = "available"
     reserved = "reserved"
+    unavailable = "unavailable"
 
 
 class TimeSlot(BaseModel):
