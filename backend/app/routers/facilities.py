@@ -46,11 +46,22 @@ def get_facility_timeslots(
     slots: list[TimeSlot] = []
     start_dt = datetime.combine(target_date, facility.open_time)
     close_dt = datetime.combine(target_date, facility.close_time)
+    
+    now = datetime.now()
 
     while start_dt < close_dt:
         end_dt = start_dt + timedelta(minutes=interval)
         if end_dt > close_dt:
             break
+
+        is_past = False
+        if end_dt <= now:
+            is_past = True
+        
+        is_cleaning_time = False
+        slot_start_hour = start_dt.time().hour
+        if 6 <= slot_start_hour < 8:
+            is_cleaning_time = True
 
         overlapping = next(
             (
@@ -61,24 +72,26 @@ def get_facility_timeslots(
             None,
         )
 
+        status_enum = TimeSlotStatus.available
+        reservation_id = None
+        user_name = None
+
         if overlapping:
-            slots.append(
-                TimeSlot(
-                    start_time=start_dt.time(),
-                    end_time=end_dt.time(),
-                    status=TimeSlotStatus.reserved,
-                    reservation_id=overlapping.id,
-                    user_name=overlapping.user.full_name if overlapping.user else None,
-                )
+            status_enum = TimeSlotStatus.reserved
+            reservation_id = overlapping.id
+            user_name = overlapping.user.full_name if overlapping.user else None
+        elif is_past or is_cleaning_time:
+            status_enum = TimeSlotStatus.unavailable
+
+        slots.append(
+            TimeSlot(
+                start_time=start_dt.time(),
+                end_time=end_dt.time(),
+                status=status_enum,
+                reservation_id=reservation_id,
+                user_name=user_name,
             )
-        else:
-            slots.append(
-                TimeSlot(
-                    start_time=start_dt.time(),
-                    end_time=end_dt.time(),
-                    status=TimeSlotStatus.available,
-                )
-            )
+        )
 
         start_dt = end_dt
 
