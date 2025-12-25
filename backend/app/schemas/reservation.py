@@ -20,8 +20,8 @@ class ReservationCreate(BaseModel):
 
     @field_validator("end_time")
     @classmethod
-    def validate_time_order(cls, value: time, values: dict) -> time:
-        start_time = values.get("start_time")
+    def validate_time_order(cls, value: time, info) -> time:
+        start_time = info.data.get("start_time")
         if start_time and value <= start_time:
             raise ValueError("end_time must be later than start_time")
         return value
