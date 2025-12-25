@@ -51,8 +51,10 @@ def get_facility_timeslots(
 
     while start_dt < close_dt:
         end_dt = start_dt + timedelta(minutes=interval)
+        
+        # edge case for last slot exceeding close time 23:00-23:45
         if end_dt > close_dt:
-            break
+            end_dt = close_dt
 
         is_past = False
         if end_dt <= now:
