@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import 'booking_screen.dart';
 
 class LibraryDetailScreen extends StatefulWidget {
   final int libraryId;
@@ -46,6 +47,18 @@ class _LibraryDetailScreenState extends State<LibraryDetailScreen> {
           final library = snapshot.data!;
           final facilities = library['facilities'] as List<dynamic>;
 
+          // Group facilities by Type
+          final Map<String, List<dynamic>> groupedFacilities = {};
+          for (var f in facilities) {
+            final type = f['type'] ?? 'Other';
+            if (!groupedFacilities.containsKey(type)) {
+              groupedFacilities[type] = [];
+            }
+            groupedFacilities[type]!.add(f);
+          }
+
+          final groupKeys = groupedFacilities.keys.toList();
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -83,16 +96,6 @@ class _LibraryDetailScreenState extends State<LibraryDetailScreen> {
                         ),
                       ],
                     ),
-                    // if (library['description'] != null) ...[
-                    //   const SizedBox(height: 8),
-                    //   Text(
-                    //     library['description'],
-                    //     style: const TextStyle(
-                    //       fontSize: 14,
-                    //       color: Colors.black54,
-                    //     ),
-                    //   ),
-                    // ],
                   ],
                 ),
               ),
@@ -105,14 +108,16 @@ class _LibraryDetailScreenState extends State<LibraryDetailScreen> {
                 ),
               ),
 
-              // Facilities List
+              // Facilities List (Grouped by Type)
               Expanded(
-                child: facilities.isEmpty
+                child: groupKeys.isEmpty
                     ? const Center(child: Text("No facilities available."))
                     : ListView.builder(
-                        itemCount: facilities.length,
+                        itemCount: groupKeys.length,
                         itemBuilder: (context, index) {
-                          final facility = facilities[index];
+                          final type = groupKeys[index];
+                          final items = groupedFacilities[type]!;
+
                           return Card(
                             margin: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -120,29 +125,24 @@ class _LibraryDetailScreenState extends State<LibraryDetailScreen> {
                             ),
                             child: ListTile(
                               leading: Icon(
-                                _getFacilityIcon(facility['type']),
+                                _getFacilityIcon(type),
                                 color: Colors.teal,
+                                size: 32,
                               ),
-                              title: Text(facility['name']),
-                              subtitle: Text(
-                                "Capacity: ${facility['capacity']} people",
-                              ),
+                              title: Text("$type"),
                               trailing: ElevatedButton(
                                 onPressed: () {
-                                  ScaffoldMessenger.of(
+                                  _showFacilitySelectionDialog(
                                     context,
-                                  ).clearSnackBars();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text("Booking coming soon!"),
-                                    ),
+                                    type,
+                                    items,
                                   );
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.teal,
                                   foregroundColor: Colors.white,
                                 ),
-                                child: const Text("Book"),
+                                child: const Text("Select"),
                               ),
                             ),
                           );
@@ -153,6 +153,41 @@ class _LibraryDetailScreenState extends State<LibraryDetailScreen> {
           );
         },
       ),
+    );
+  }
+
+  void _showFacilitySelectionDialog(
+    BuildContext context,
+    String type,
+    List<dynamic> items,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return SimpleDialog(
+          title: Text("Select $type"),
+          children: items.map((item) {
+            return SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => BookingScreen(
+                      facilityId: item['id'],
+                      facilityName: item['name'],
+                    ),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Text(item['name'], style: const TextStyle(fontSize: 16)),
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 
