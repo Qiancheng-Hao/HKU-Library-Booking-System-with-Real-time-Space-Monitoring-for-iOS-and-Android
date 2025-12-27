@@ -1,4 +1,5 @@
-from . import facilities, libraries, reservations
+from . import auth, facilities, libraries, reservations
 
-__all__ = ["facilities", "libraries", "reservations"]
+__all__ = ["auth", "facilities", "libraries", "reservations"]
+
 
