@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import models  # noqa: F401
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.routers import facilities, libraries, reservations
+from app.routers import auth, facilities, libraries, reservations
 
 Base.metadata.create_all(bind=engine)
 
@@ -22,6 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix=f"/api/{settings.api_version}")
 app.include_router(libraries.router, prefix=f"/api/{settings.api_version}")
 app.include_router(facilities.router, prefix=f"/api/{settings.api_version}")
 app.include_router(reservations.router, prefix=f"/api/{settings.api_version}")

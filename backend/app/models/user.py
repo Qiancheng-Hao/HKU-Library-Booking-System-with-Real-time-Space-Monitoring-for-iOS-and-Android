@@ -6,7 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -24,7 +24,7 @@ class User(Base):
         comment="Primary key UUID for the user.",
     )
     full_name: Mapped[str] = mapped_column(
-        String(255), nullable=False, comment="User full name as provided."
+        String(255), nullable=True, comment="User full name as provided."
     )
     email: Mapped[str] = mapped_column(
         String(255),
@@ -33,11 +33,15 @@ class User(Base):
         index=True,
         comment="Unique email used for booking identification.",
     )
+    hashed_password: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="Hashed password for authentication."
+    )
 
     reservations = relationship(
         "Reservation",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="noload",
+        primaryjoin="User.id == foreign(Reservation.user_id)",
     )
 
