@@ -4,9 +4,9 @@ import enum
 import uuid
 from datetime import date, datetime, time
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, String, Text, Time, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, String, Text, Time, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -42,14 +42,13 @@ class Reservation(Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        comment="FK referencing the booking user.",
+        comment="FK referencing the booking user (Logical).",
     )
     facility_id: Mapped[int] = mapped_column(
-        ForeignKey("facilities.id", ondelete="CASCADE"),
+        Integer,
         nullable=False,
-        comment="FK referencing the reserved facility.",
+        comment="FK referencing the reserved facility (Logical).",
     )
     reservation_date: Mapped[date] = mapped_column(
         Date, nullable=False, index=True, comment="Date of the reservation."
@@ -79,6 +78,16 @@ class Reservation(Base):
         comment="Timestamp when the reservation was cancelled.",
     )
 
-    facility = relationship("Facility", back_populates="reservations", lazy="joined")
-    user = relationship("User", back_populates="reservations", lazy="joined")
+    facility = relationship(
+        "Facility",
+        back_populates="reservations",
+        lazy="joined",
+        primaryjoin="foreign(Reservation.facility_id) == Facility.id",
+    )
+    user = relationship(
+        "User",
+        back_populates="reservations",
+        lazy="joined",
+        primaryjoin="foreign(Reservation.user_id) == User.id",
+    )
 

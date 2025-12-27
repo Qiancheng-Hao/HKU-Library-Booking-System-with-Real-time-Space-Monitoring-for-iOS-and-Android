@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import time
 
 from sqlalchemy import ForeignKey, Integer, String, Text, Time
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -18,9 +18,9 @@ class Facility(Base):
         Integer, primary_key=True, index=True, comment="Primary key of the facility."
     )
     library_id: Mapped[int] = mapped_column(
-        ForeignKey("libraries.id", ondelete="CASCADE"),
+        Integer,
         nullable=False,
-        comment="FK to the parent library.",
+        comment="FK to the parent library (Logical).",
     )
     name: Mapped[str] = mapped_column(
         String(255), nullable=False, comment="Display name for the facility."
@@ -44,11 +44,17 @@ class Facility(Base):
         Integer, default=60, nullable=False, comment="Base slot duration in minutes."
     )
 
-    library = relationship("Library", back_populates="facilities", lazy="joined")
+    library = relationship(
+        "Library",
+        back_populates="facilities",
+        lazy="joined",
+        primaryjoin="foreign(Facility.library_id) == Library.id",
+    )
     reservations = relationship(
         "Reservation",
         back_populates="facility",
         cascade="all, delete-orphan",
         lazy="noload",
+        primaryjoin="Facility.id == foreign(Reservation.facility_id)",
     )
 
