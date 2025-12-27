@@ -6,7 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -32,10 +32,10 @@ class LibraryOccupancySnapshot(Base):
         comment="Primary key UUID for the snapshot.",
     )
     library_id: Mapped[int] = mapped_column(
-        ForeignKey("libraries.id", ondelete="CASCADE"),
+        Integer,
         nullable=False,
         index=True,
-        comment="FK referencing the library being measured.",
+        comment="FK referencing the library being measured (Logical).",
     )
     seats_capacity: Mapped[int] = mapped_column(
         Integer, nullable=False, comment="Total seats considered during measurement."
@@ -61,7 +61,12 @@ class LibraryOccupancySnapshot(Base):
         doc="Refresh interval in minutes.",
     )
 
-    library = relationship("Library", back_populates="occupancy_snapshots", lazy="joined")
+    library = relationship(
+        "Library",
+        back_populates="occupancy_snapshots",
+        lazy="joined",
+        primaryjoin="foreign(LibraryOccupancySnapshot.library_id) == Library.id",
+    )
 
 
 class LibraryOccupancyStatistic(Base):
@@ -77,10 +82,10 @@ class LibraryOccupancyStatistic(Base):
         comment="Primary key UUID for the aggregated record.",
     )
     library_id: Mapped[int] = mapped_column(
-        ForeignKey("libraries.id", ondelete="CASCADE"),
+        Integer,
         nullable=False,
         index=True,
-        comment="FK referencing the library aggregated.",
+        comment="FK referencing the library aggregated (Logical).",
     )
     period_type: Mapped[OccupancyPeriod] = mapped_column(
         Enum(OccupancyPeriod, name="occupancy_period"),
@@ -97,6 +102,13 @@ class LibraryOccupancyStatistic(Base):
         DateTime(timezone=True),
         nullable=False,
         comment="End timestamp of the aggregation window.",
+    )
+
+    library = relationship(
+        "Library",
+        back_populates="occupancy_stats",
+        lazy="joined",
+        primaryjoin="foreign(LibraryOccupancyStatistic.library_id) == Library.id",
     )
     average_rate: Mapped[float] = mapped_column(
         Float, nullable=False, comment="Average occupancy rate for the window."
@@ -120,5 +132,4 @@ class LibraryOccupancyStatistic(Base):
         doc="Optional aggregation window size in minutes.",
     )
 
-    library = relationship("Library", back_populates="occupancy_stats", lazy="joined")
 

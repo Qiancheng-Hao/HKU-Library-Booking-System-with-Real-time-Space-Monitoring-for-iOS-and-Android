@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -33,17 +33,20 @@ class Library(Base):
         back_populates="library",
         cascade="all, delete-orphan",
         lazy="selectin",
+        primaryjoin="Library.id == foreign(Facility.library_id)",
     )
     occupancy_snapshots = relationship(
         "LibraryOccupancySnapshot",
         back_populates="library",
         cascade="all, delete-orphan",
         lazy="noload",
+        primaryjoin="Library.id == foreign(LibraryOccupancySnapshot.library_id)",
     )
     occupancy_stats = relationship(
         "LibraryOccupancyStatistic",
         back_populates="library",
         cascade="all, delete-orphan",
         lazy="noload",
+        primaryjoin="Library.id == foreign(LibraryOccupancyStatistic.library_id)",
     )
 
