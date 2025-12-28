@@ -58,3 +58,7 @@ class Facility(Base):
         primaryjoin="Facility.id == foreign(Reservation.facility_id)",
     )
 
+    @property
+    def library_name(self) -> str:
+        return self.library.name
+

@@ -1,7 +1,8 @@
 from datetime import timedelta
 from typing import Annotated
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -59,3 +60,22 @@ def login(
         subject=user.id, expires_delta=access_token_expires
     )
     return Token(access_token=access_token, token_type="bearer")
+
+@router.get("/auth/me", response_model=UserSchema)
+def read_users_me(request: Request, db: Session = Depends(get_db)):
+    """
+    Get current user profile.
+    """
+    try:
+        user_id = uuid.UUID(str(getattr(request.state, "user_subject")))
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user

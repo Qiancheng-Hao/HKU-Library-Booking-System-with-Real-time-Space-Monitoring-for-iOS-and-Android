@@ -56,27 +56,24 @@ class _BookingScreenState extends State<BookingScreen> {
     if (_selectedSlot == null) return;
 
     try {
-      // final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
-      // // Hardcoded user for now
-      // await ApiService.createReservation(
-      //   facilityId: widget.facilityId,
-      //   date: dateStr,
-      //   startTime: _selectedSlot!['start_time'],
-      //   endTime: _selectedSlot!['end_time'],
-      //   userName: "Test Student",
-      //   userEmail: "test@hku.hk",
-      // );
+      await ApiService.createReservation(
+        facilityId: widget.facilityId,
+        date: dateStr,
+        startTime: _selectedSlot!['start_time'],
+        endTime: _selectedSlot!['end_time'],
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Booking functionality coming soon!'),
-            backgroundColor: Colors.orange,
+            content: Text('Booking Confirmed!'),
+            backgroundColor: Colors.green,
           ),
         );
-        // Navigator.pop(context); // Go back to details
+        Navigator.pop(context); // Go back to details
       }
     } catch (e) {
       if (mounted) {

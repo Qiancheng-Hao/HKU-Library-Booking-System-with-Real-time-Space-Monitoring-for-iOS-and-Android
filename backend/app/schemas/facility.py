@@ -23,6 +23,7 @@ class FacilitySummary(BaseModel):
     name: str
     type: str
     capacity: int
+    library_name: str
 
 class FacilityDetail(FacilityBase):
     pass
