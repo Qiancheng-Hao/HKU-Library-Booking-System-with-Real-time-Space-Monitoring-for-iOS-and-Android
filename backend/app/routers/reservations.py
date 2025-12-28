@@ -14,9 +14,18 @@ router = APIRouter(prefix="/reservations", tags=["Reservations"])
 
 @router.post("", response_model=ReservationPublic, status_code=status.HTTP_201_CREATED)
 def create_reservation(
+    request: Request,
     payload: ReservationCreate,
     db: Session = Depends(get_db),
 ) -> ReservationPublic:
+    try:
+        user_id = uuid.UUID(str(getattr(request.state, "user_subject")))
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
     service = ReservationService(db)
     facility = service.get_facility(payload.facility_id)
     service.enforce_lead_time(payload.reservation_date)
@@ -29,13 +38,9 @@ def create_reservation(
         start_time=payload.start_time,
         end_time=payload.end_time,
     )
-    user = service.get_or_create_user(
-        full_name=payload.user_full_name,
-        email=payload.user_email,
-    )
 
     reservation = Reservation(
-        user_id=user.id,
+        user_id=user_id,
         facility_id=facility.id,
         reservation_date=payload.reservation_date,
         start_time=payload.start_time,

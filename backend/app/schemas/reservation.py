@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models import ReservationStatus
 from .facility import FacilitySummary
-from .user import UserBase
+from .user import User
 
 
 class ReservationCreate(BaseModel):
@@ -14,8 +14,8 @@ class ReservationCreate(BaseModel):
     reservation_date: date
     start_time: time
     end_time: time
-    user_full_name: str = Field(..., min_length=2, max_length=255)
-    user_email: EmailStr
+    user_full_name: str | None = None
+    user_email: EmailStr | None = None
     notes: str | None = None
 
     @field_validator("end_time")
@@ -39,7 +39,7 @@ class ReservationPublic(BaseModel):
     created_at: datetime
     cancelled_at: datetime | None = None
     facility: FacilitySummary
-    user: UserBase
+    user: User
 
 class ReservationListResponse(BaseModel):
     items: list[ReservationPublic]

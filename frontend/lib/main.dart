@@ -1,10 +1,20 @@
 import 'package:flutter/material.dart';
-import 'services/api_service.dart';
+import 'package:provider/provider.dart';
 import 'screens/library_list_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/login_screen.dart';
+import 'services/api_service.dart';
+import 'providers/auth_provider.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => AuthProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -13,6 +23,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -20,7 +31,15 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
       ),
-      home: const SettingsPage(),
+      home: Consumer<AuthProvider>(
+        builder: (context, auth, child) {
+          if (auth.isLoggedIn) {
+            return const SettingsPage();
+          } else {
+            return const LoginScreen();
+          }
+        },
+      ),
     );
   }
 }

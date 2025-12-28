@@ -24,13 +24,6 @@ class Reservation(Base):
 
     __tablename__ = "reservations"
     __table_args__ = (
-        UniqueConstraint(
-            "facility_id",
-            "reservation_date",
-            "start_time",
-            "end_time",
-            name="uq_facility_reservation_slot",
-        ),
         {"comment": "Facility reservations with status tracking."},
     )
 
