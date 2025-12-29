@@ -40,11 +40,15 @@ The system can detect library seat occupancy (both people and items hogging seat
 
 ### AI Booking Agent
 
+- 🤖 **Conversational AI Interface**: Natural language booking through GitHub Models AI
+- 🌐 **Multi-User Support**: Session-based architecture for concurrent users
 - 🚀 **Concurrent Booking**: Multi-threaded booking for multiple rooms/sessions
+- 🗺️ **Fuzzy Location Matching**: Intelligent location and room type recognition
 - 🔄 **Automatic Retry**: Intelligent retry mechanism for failed bookings
 - 🔐 **Secure Authentication**: Portal login with credential management
 - ⚡ **High-Speed Execution**: Optimized for competitive booking scenarios
-- 🎯 **Room Selection**: Flexible room and session preference handling
+- 🎯 **Flexible Selection**: Natural language room and session preference handling
+- 📡 **RESTful API**: HTTP-based MCP server for easy frontend integration
 
 ## 📁 Project Structure
 
@@ -53,9 +57,13 @@ HKU-Library-Booking-System/
 ├── README.md
 ├── requirements.txt
 ├── ai_agent/                        # Automated booking system
+│   ├── booking_agent.py            # AI agent with conversation interface
 │   ├── booking_system.py           # Core booking logic with Selenium
-│   ├── server.py                   # MCP server for booking agent
-│   └── call_server.py              # Server invocation script
+│   ├── facility_mapping.py         # Location and room type mapping
+│   ├── server.py                   # Multi-user MCP server with session management
+│   ├── test_facility_mapping.py    # Facility mapping tests
+│   ├── facility_details.txt        # Room type and location reference
+│   └── API_DOCUMENTATION.md        # Complete API documentation
 └── computer_vision/                 # Seat occupancy detection
     ├── core/
     │   ├── seat_occupancy_detector.py  # Main detector class
@@ -70,6 +78,7 @@ HKU-Library-Booking-System/
     │   ├── test.py                     # Testing script
     │   └── data/                       # Test images
     └── train_models/
+        ├── auto_label.ipynb            # Automatic annotation tool for custom datasets
         ├── train_person_and_item.py    # Training script for person/item model
         ├── train_seat_model.py         # Training script for seat model
         └── fix_dataset_labels.py       # Dataset preprocessing utilities
@@ -108,14 +117,14 @@ conda install -c conda-forge opencv
 pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 
 # Install other dependencies
-pip install ultralytics selenium webdriver-manager fastmcp
+pip install ultralytics selenium webdriver-manager fastmcp openai agent-framework
 ```
 
 #### Option B: Using pip only
 
 ```bash
 # Install all dependencies
-pip install opencv-python torch torchvision ultralytics selenium webdriver-manager fastmcp
+pip install opencv-python torch torchvision ultralytics selenium webdriver-manager fastmcp openai agent-framework
 ```
 
 **Note**: If your system doesn't support CUDA, install the CPU version of PyTorch:
@@ -220,110 +229,220 @@ DEBUG_MODE = False               # Enable debug mode
 
 ### Overview
 
-The AI Booking Agent automates the library room booking process using Selenium WebDriver with multi-threaded concurrent booking capabilities. It can handle competitive booking scenarios where speed is critical.
+The AI Booking Agent is an intelligent conversational system that automates library room booking through natural language interaction. Built with GitHub Models AI and session-based architecture, it supports multiple concurrent users and handles the complete booking workflow from information gathering to execution.
 
-### Features
+### Key Features
 
-- **Concurrent Multi-Room Booking**: Books multiple rooms simultaneously using thread pools
-- **Pre-Login Strategy**: Logs in before booking time to minimize latency
-- **Automatic Room Selection**: Attempts booking in priority order from a list of preferred rooms
-- **Session Management**: Supports multiple time slot bookings in a single run
-- **Headless Operation**: Runs in background without opening browser windows
-- **Anti-Detection**: Configured to avoid automation detection
+- **Natural Language Interface**: Chat with the AI agent using everyday language
+- **Multi-User Sessions**: Isolated sessions for concurrent users with automatic timeout
+- **Intelligent Mapping**: Fuzzy matching for location and room type names (e.g., "Chi Wah" → "Chi Wah Learning Commons")
+- **Conversation-Driven**: Agent guides users through collecting all required booking information
+- **Concurrent Execution**: Multi-threaded booking for speed in competitive scenarios
+- **RESTful API**: HTTP-based endpoints for easy frontend integration
+
+### Architecture
+
+```
+Frontend/Mobile App
+        ↓
+  HTTP REST API (Port 8000)
+        ↓
+  MCP Server (server.py)
+        ↓
+  Session Manager
+        ↓
+  BookingAgent (AI Chat)
+        ↓
+  BookingSystem (Selenium)
+        ↓
+  HKU Library Website
+```
 
 ### Quick Start
 
-#### 1. Configure Booking Parameters
+#### Method 1: API Server (Recommended for Production)
 
-Edit [ai_agent/server.py](ai_agent/server.py) with your booking details:
+The AI agent runs as an HTTP server with session management for multiple users.
 
-```python
-username = "your_portal_uid"      # Your HKU portal ID
-password = "your_password"        # Your portal password
-room_type = 29                     # Room type ID
-location = 5                       # Location ID
-date = "20251220"                  # Booking date (YYYYMMDD)
-time_slot = "14001500"            # Time slot (HHMM-HHMM)
-rooms = ["258", "259", "260"]     # Preferred room numbers
-```
-
-#### 2. Run the Booking Agent
+**Step 1: Start the server**
 
 ```bash
 cd ai_agent
 python server.py
 ```
 
-#### 3. Using as MCP Server
+The server starts on `http://localhost:8000` with automatic session management.
 
-The booking agent can be run as a Model Context Protocol (MCP) server:
-
-```bash
-python call_server.py
-```
-
-### Booking System Architecture
+**Step 2: Create a session and chat**
 
 ```python
-from booking_system import OptimizedBookingSystem
+import requests
 
-# Initialize booking system
-booking = OptimizedBookingSystem(
-    username="u1234567",
-    password="your_password",
-    location=5,              # Library location
-    type=29,                 # Room type
-    date="20251220",         # Target date
-    sessions=["14001500"]    # Time slots
+# Create a new booking session
+response = requests.post('http://localhost:8000/tools/create_session', 
+    json={
+        "arguments": {
+            "github_token": "your_github_token",
+            "user_id": "user123"
+        }
+    }
 )
+session_id = response.json()["session_id"]
 
-# Initialize multiple browser instances
-booking.initialize_multiple_drivers()
-
-# Pre-login to all instances
-booking.pre_login_all()
-
-# Attempt concurrent booking
-rooms = ["258", "259", "260"]
-booking.concurrent_booking_attempt(rooms)
+# Chat with the agent
+response = requests.post('http://localhost:8000/tools/chat_with_agent',
+    json={
+        "arguments": {
+            "session_id": session_id,
+            "message": "I want to book a study room at Chi Wah tomorrow 2PM"
+        }
+    }
+)
+print(response.json()["response"])
 ```
 
-### Advanced Configuration
+**Step 3: View complete API documentation**
 
-You can customize the booking behavior by modifying parameters in [ai_agent/booking_system.py](ai_agent/booking_system.py):
+See [ai_agent/API_DOCUMENTATION.md](ai_agent/API_DOCUMENTATION.md) for:
+- Complete API reference for all endpoints
+- Request/response formats
+- JavaScript/React integration examples
+- Session management best practices
+- Error handling guide
 
-| Parameter          | Description                              | Default |
-| ------------------ | ---------------------------------------- | ------- |
-| `num_drivers`    | Number of concurrent browser instances   | 3       |
-| `headless`       | Run browsers in headless mode            | True    |
-| `timeout`        | Maximum wait time for elements (seconds) | 10      |
-| `retry_attempts` | Number of retry attempts per booking     | 3       |
+#### Method 2: Direct Agent Usage (Testing/Development)
 
-### Troubleshooting
+For testing or standalone usage without the server:
 
-**Chrome Driver Issues:**
+```python
+from booking_agent import BookingAgent
+import asyncio
 
-- The system uses `webdriver-manager` to automatically download the correct ChromeDriver
-- If issues persist, manually install ChromeDriver matching your Chrome version
+async def main():
+    # Initialize agent with GitHub token
+    agent = BookingAgent(github_token="your_github_token")
+    
+    # Start conversation
+    await agent.start_conversation()
+    
+    # Or use programmatically
+    response = await agent.chat("I want to book Chi Wah study room")
+    print(response)
 
-**Booking Fails:**
+asyncio.run(main())
+```
 
-- Check credentials are correct
-- Verify the booking URL is accessible
-- Ensure room IDs and time slots are valid
-- Check if you've reached booking limits
+### Conversation Flow Example
 
-**Performance Optimization:**
+```
+Agent: Hello! I'm your HKU Library booking assistant. 
+       I'll help you book a study room. What would you like to book?
 
-- Increase `num_drivers` for more concurrent attempts
-- Run on a machine with better network connectivity
-- Pre-login closer to the booking opening time
+User:  I want to book a study room at Chi Wah tomorrow
+
+Agent: Great! I'll help you book a study room at Chi Wah Learning Commons.
+       What time would you like to book? (e.g., 2PM, 14:00-15:00)
+
+User:  2PM to 4PM
+
+Agent: Perfect! Which room numbers would you prefer? 
+       Available rooms: 258-266, 268-271, 274-275
+
+User:  258, 259, 260
+
+Agent: I have collected the following information:
+       - Location: Chi Wah Learning Commons
+       - Type: Study Room
+       - Date: 2025-12-30
+       - Time: 14:00-15:00, 15:00-16:00
+       - Rooms: 258, 259, 260
+       
+       To proceed with booking, I need your HKU credentials.
+       Please provide your UID and password.
+
+User:  UID: u1234567, Password: ********
+
+Agent: Executing booking... 
+       Successfully booked room 258 for 14:00-15:00!
+```
+
+### Supported Locations and Room Types
+
+The agent supports fuzzy matching for user-friendly names:
+
+**Libraries**:
+- Main Library (aliases: "main", "ml", "main lib")
+- Chi Wah Learning Commons (aliases: "chi wah", "chiwah", "cw", "cwlc")
+- Law Library (aliases: "law", "ll")
+- Medical Library (aliases: "medical", "med")
+- Music Library (aliases: "music")
+
+**Room Types** (varies by library):
+- Study Room
+- Discussion Room
+- Single Study Room
+- Computer Room
+- Studio and Editing Room
+- Study Table
+
+See [ai_agent/facility_mapping.py](ai_agent/facility_mapping.py) for complete mapping details.
+
+### Session Management
+
+**Features**:
+- Automatic session creation with UUID
+- 30-minute inactivity timeout
+- Background cleanup of expired sessions
+- Thread-safe concurrent access
+- Per-user isolated conversation history
+
+**API Endpoints**:
+- `create_session()` - Create new user session
+- `chat_with_agent()` - Send messages
+- `get_session_status()` - View collected info
+- `reset_session()` - Clear collected data
+- `end_session()` - Explicitly end session
+- `list_active_sessions()` - Admin monitoring
+
+### Configuration
+
+**Server Settings** (in `server.py`):
+```python
+SESSION_TIMEOUT_MINUTES = 30     # Auto-expire inactive sessions
+CLEANUP_INTERVAL_SECONDS = 300   # Background cleanup frequency
+```
+
+**Booking Settings** (in `booking_system.py`):
+```python
+num_drivers = 3                  # Concurrent browser instances
+headless = True                  # Run browsers in background
+timeout = 10                     # Element wait timeout (seconds)
+retry_attempts = 3               # Retry failed bookings
+```
 
 ---
 
 ## 🎓 Training Models
+### 0. Auto-Labeling Tool (NEW)
 
-> **Note**: Due to the large size of training datasets, they are not included in this repository. The following instructions assume you have prepared your own training datasets in YOLO format.
+Before training, you can use the automatic labeling tool to annotate your custom dataset:
+
+#### Purpose
+
+The `auto_label.ipynb` notebook automates the annotation process for custom-collected images using pre-trained YOLO models. This significantly reduces manual labeling effort.
+
+#### Usage
+
+1. Place your unlabeled images in a folder
+2. Open `computer_vision/train_models/auto_label.ipynb`
+3. Configure the source folder and output paths
+4. Run the notebook to generate YOLO format annotations
+
+The tool will:
+- Detect objects using existing YOLO models
+- Generate `.txt` label files in YOLO format
+- Allow you to review and refine annotations
+- Prepare dataset for training
 
 ### 1. Train Person and Item Detection Model
 
@@ -541,9 +660,23 @@ Accuracy depends on:
 - Model training data similarity to test environment
 - Typical accuracy: 85-95% for well-lit, standard library settings
 
-### Booking System
+### Booking Agent
 
-**Q5: Why do my bookings fail?**
+**Q5: How do I get a GitHub token for the AI agent?**
+
+1. Go to https://github.com/settings/tokens
+2. Generate a new Personal Access Token (classic)
+3. Ensure it has access to GitHub Models
+4. Store it securely and use in `create_session()` or agent initialization
+
+**Q6: Session expired - what should I do?**
+
+Sessions automatically expire after 30 minutes of inactivity. Simply create a new session:
+```python
+response = requests.post('http://localhost:8000/tools/create_session', ...)
+```
+
+**Q7: Why do my bookings fail?**
 
 Common issues:
 
@@ -553,7 +686,7 @@ Common issues:
 - ❌ Network connectivity issues
 - ❌ Booking website structure changed
 
-**Q6: How many concurrent browsers should I use?**
+**Q8: How many concurrent browsers should I use?**
 
 Recommended settings:
 
@@ -563,10 +696,23 @@ Recommended settings:
 
 More browsers increase success probability but consume more system resources.
 
-**Q7: Can I book multiple time slots?**
+**Q9: Can the agent understand different languages?**
 
-Yes! Pass a list of time slots to the booking system:
+The agent is trained on English conversations but can handle various phrasings:
+- "I want to book Chi Wah" ✅
+- "Book a room at CW" ✅
+- "Study room at chiwah tomorrow 2PM" ✅
 
+**Q10: Can I book multiple time slots?**
+
+Yes! The agent automatically handles multiple time slots:
+
+```
+User: "I want to book from 2PM to 4PM"
+Agent: (Creates sessions for 14:00-15:00 AND 15:00-16:00)
+```
+
+Or pass directly to the booking system:
 ```python
 sessions = ["14001500", "15001600", "16001700"]
 booking = OptimizedBookingSystem(
@@ -578,118 +724,12 @@ booking = OptimizedBookingSystem(
     sessions=sessions  # Multiple sessions
 )
 ```
-
-**Q8: Is this legal/allowed?**
-
-⚠️ **Disclaimer**: This tool is for educational purposes. Always:
-
-- Follow your institution's booking policies
-- Don't abuse the system or create unfair advantages
-- Use responsibly and ethically
-- Respect rate limits and server resources
-
 ---
-
-## 💻 System Requirements
-
-### Minimum Requirements
-
-| Component         | Requirement                                |
-| ----------------- | ------------------------------------------ |
-| **OS**      | Windows 10/11, macOS 10.14+, Ubuntu 18.04+ |
-| **Python**  | 3.8 or higher                              |
-| **RAM**     | 8GB (16GB recommended for training)        |
-| **Storage** | 5GB free space                             |
-| **Browser** | Chrome/Chromium (for booking agent)        |
-
-### For GPU Acceleration
-
-| Component          | Requirement                                 |
-| ------------------ | ------------------------------------------- |
-| **CUDA**     | 11.0 or higher                              |
-| **GPU VRAM** | 6GB minimum (8GB+ recommended for training) |
-| **GPU**      | NVIDIA GPU with compute capability 3.5+     |
-
-### For Training Models
-
-| Component               | Requirement                                    |
-| ----------------------- | ---------------------------------------------- |
-| **RAM**           | 16GB minimum                                   |
-| **GPU VRAM**      | 8GB minimum (12GB+ recommended)                |
-| **Storage**       | 20GB+ (for datasets and checkpoints)           |
-| **Training Time** | 2-6 hours on RTX 3060 (varies by dataset size) |
-
----
-
-## 📊 Performance Benchmarks
-
-### Computer Vision Module
-
-| Metric                          | Value                      |
-| ------------------------------- | -------------------------- |
-| **Inference Speed (GPU)** | ~30-50 FPS (RTX 3060)      |
-| **Inference Speed (CPU)** | ~3-5 FPS (Intel i7)        |
-| **Detection Accuracy**    | 85-95% (on library images) |
-| **Model Size (Combined)** | ~150MB                     |
-
-### Booking Agent
-
-| Metric                         | Value                          |
-| ------------------------------ | ------------------------------ |
-| **Login Time**           | 2-4 seconds                    |
-| **Booking Latency**      | <1 second (after pre-login)    |
-| **Success Rate**         | 70-90% (competitive scenarios) |
-| **Concurrent Instances** | Up to 10 browsers              |
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes:
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-## 📝 License
-
-This project uses components with different licenses:
-
-- **YOLO Models**: [AGPL-3.0 License](https://github.com/ultralytics/ultralytics/blob/main/LICENSE) (Ultralytics)
-
-Please ensure compliance with all applicable licenses when using this project.
-
----
-
 ## 🙏 Acknowledgments
 
 - [Ultralytics YOLOv11](https://github.com/ultralytics/ultralytics) for the object detection framework
 - [Selenium](https://www.selenium.dev/) for web automation capabilities
 - [FastMCP](https://github.com/jlowin/fastmcp) for Model Context Protocol implementation
+- [GitHub Models](https://github.com/marketplace/models) for AI agent capabilities
+- [Agent Framework](https://github.com/microsoft/agent-framework) for conversation management
 - HKU Library for the booking system infrastructure
-
----
-
-## 📧 Contact
-
-For questions, issues, or suggestions:
-
-- **GitHub Issues**: [Create an issue](https://github.com/yourusername/HKU-Library-Booking-System/issues)
-- **Email**: god@hku.hk or altiera@hku.hk
-
----
-
-## ⚠️ Disclaimer
-
-This project is developed for **educational and research purposes only**. Users are responsible for:
-
-- Complying with HKU's IT policies and library regulations
-- Using the booking system responsibly and ethically
-- Not abusing or overloading university systems
-- Respecting other students' fair access to resources
-
-The developers are not responsible for any misuse of this software or violations of university policies.
