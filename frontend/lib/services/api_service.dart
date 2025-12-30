@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import '../main.dart';
-import '../screens/login_screen.dart';
 import '../providers/auth_provider.dart';
 
 class ApiService {
@@ -92,7 +91,7 @@ class ApiService {
         return json.decode(response.body);
       } else if (response.statusCode == 401) {
         _handleAuthError();
-        throw Exception('Unauthorized');
+        return {};
       } else {
         throw Exception('Failed to load profile: ${response.statusCode}');
       }
@@ -146,7 +145,7 @@ class ApiService {
         return data['items'];
       } else if (response.statusCode == 401) {
         _handleAuthError();
-        throw Exception('Unauthorized');
+        return [];
       } else {
         throw Exception('Failed to load libraries: ${response.statusCode}');
       }
@@ -167,7 +166,7 @@ class ApiService {
         return data['library'];
       } else if (response.statusCode == 401) {
         _handleAuthError();
-        throw Exception('Unauthorized');
+        return {};
       } else {
         throw Exception(
           'Failed to load library details: ${response.statusCode}',
@@ -194,7 +193,7 @@ class ApiService {
         return json.decode(response.body);
       } else if (response.statusCode == 401) {
         _handleAuthError();
-        throw Exception('Unauthorized');
+        return {};
       } else {
         throw Exception('Failed to load time slots: ${response.statusCode}');
       }
@@ -226,7 +225,7 @@ class ApiService {
       if (response.statusCode != 201) {
         if (response.statusCode == 401) {
           _handleAuthError();
-          throw Exception('Unauthorized');
+          return;
         }
         final error = json.decode(response.body);
         throw Exception(error['detail'] ?? 'Failed to create reservation');
@@ -248,7 +247,7 @@ class ApiService {
         return data['items'];
       } else if (response.statusCode == 401) {
         _handleAuthError();
-        throw Exception('Unauthorized');
+        return [];
       } else {
         throw Exception('Failed to load reservations: ${response.statusCode}');
       }
@@ -268,7 +267,7 @@ class ApiService {
       if (response.statusCode != 200) {
         if (response.statusCode == 401) {
           _handleAuthError();
-          throw Exception('Unauthorized');
+          return;
         }
         throw Exception('Failed to cancel reservation: ${response.statusCode}');
       }

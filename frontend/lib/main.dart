@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'screens/library_list_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/login_screen.dart';
-import 'services/api_service.dart';
 import 'providers/auth_provider.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
