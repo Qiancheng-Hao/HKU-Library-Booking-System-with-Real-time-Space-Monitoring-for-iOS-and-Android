@@ -24,7 +24,8 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
         if (
-            path.startswith(f"/api/{settings.api_version}/auth")
+            path == f"/api/{settings.api_version}/auth/login"
+            or path == f"/api/{settings.api_version}/auth/register"
             or path == "/health"
             or path in ("/docs", "/redoc", "/openapi.json")
         ):
