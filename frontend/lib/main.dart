@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'screens/home_screen.dart';
 import 'screens/library_list_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/login_screen.dart';
@@ -104,7 +105,9 @@ class _SettingsPageState extends State<SettingsPage> {
           });
         },
       ),
-      body: currentIndex == 2
+      body: currentIndex == 0
+          ? const HomeScreen()
+          : currentIndex == 2
           ? const LibraryListScreen()
           : currentIndex == 3
           ? const SettingsScreen()

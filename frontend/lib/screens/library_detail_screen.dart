@@ -129,7 +129,7 @@ class _LibraryDetailScreenState extends State<LibraryDetailScreen> {
                                 color: Colors.teal,
                                 size: 32,
                               ),
-                              title: Text("$type"),
+                              title: Text(type),
                               trailing: ElevatedButton(
                                 onPressed: () {
                                   _showFacilitySelectionDialog(
