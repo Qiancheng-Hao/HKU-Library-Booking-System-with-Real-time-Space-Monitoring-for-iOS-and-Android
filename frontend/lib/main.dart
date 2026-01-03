@@ -58,24 +58,15 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
-        flexibleSpace: Container(
-          margin: EdgeInsets.fromLTRB(80.0, 55.0, 80.0, 5.0),
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/imgs/hku_logo.png'),
-              fit: BoxFit.fitWidth,
-            ),
-          ),
+        scrolledUnderElevation: 0,
+        title: Image.asset(
+          'assets/imgs/hku_logo.png',
+          fit: BoxFit.contain,
+          height: 45,
         ),
+        centerTitle: true,
       ),
-      drawer: Drawer(
-        child: Column(
-          children: [
-            DrawerHeader(child: Text("Menu")),
-            ListTile(title: Text('Logout')),
-          ],
-        ),
-      ),
+
       bottomNavigationBar: NavigationBar(
         height: 56,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
