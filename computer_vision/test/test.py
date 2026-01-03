@@ -17,7 +17,7 @@ def get_all_image() -> list[str]:
     Returns:
         list[str]: List of image file paths
     """
-    image_patterns = ['*.jpg', '*.jpeg', '*.png', '*.bmp']
+    image_patterns = ['*.jpg', '*.jpeg', '*.png', '*.bmp', "*.HEIC"]
     image_files = []
     for pattern in image_patterns:
         # create the full search path
