@@ -8,7 +8,7 @@ from app import models  # noqa: F401
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.core import security
-from app.routers import auth, facilities, libraries, reservations
+from app.routers import auth, facilities, libraries, occupancy_cv, reservations
 
 Base.metadata.create_all(bind=engine)
 
@@ -62,6 +62,7 @@ app.include_router(auth.router, prefix=f"/api/{settings.api_version}")
 app.include_router(libraries.router, prefix=f"/api/{settings.api_version}")
 app.include_router(facilities.router, prefix=f"/api/{settings.api_version}")
 app.include_router(reservations.router, prefix=f"/api/{settings.api_version}")
+app.include_router(occupancy_cv.router, prefix=f"/api/{settings.api_version}")
 
 
 @app.get("/health", tags=["Health"])

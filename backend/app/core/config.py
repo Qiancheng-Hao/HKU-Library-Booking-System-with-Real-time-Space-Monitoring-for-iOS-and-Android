@@ -43,6 +43,26 @@ class Settings(BaseSettings):
         default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES"
     )
 
+    cv_occupancy_model_path: str | None = Field(
+        default=None,
+        alias="CV_OCCUPANCY_MODEL_PATH",
+    )
+    cv_seat_model_path: str | None = Field(
+        default=None,
+        alias="CV_SEAT_MODEL_PATH",
+    )
+    cv_device: str = Field(default="auto", alias="CV_DEVICE")
+    cv_confidence_threshold: float = Field(default=0.5, alias="CV_CONFIDENCE_THRESHOLD")
+    cv_proximity_threshold: float = Field(default=100.0, alias="CV_PROXIMITY_THRESHOLD")
+    cv_item_cluster_threshold: float = Field(
+        default=150.0, alias="CV_ITEM_CLUSTER_THRESHOLD"
+    )
+    cv_seat_expansion_factor: float = Field(
+        default=1.5, alias="CV_SEAT_EXPANSION_FACTOR"
+    )
+    cv_imgsz: int = Field(default=640, alias="CV_IMAGE_SIZE")
+    cv_seat_imgsz: int = Field(default=640, alias="CV_SEAT_IMAGE_SIZE")
+
 
 
 @lru_cache

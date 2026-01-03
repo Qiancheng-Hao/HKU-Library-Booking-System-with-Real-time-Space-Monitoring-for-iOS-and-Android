@@ -88,3 +88,6 @@ Thumbs.db
 
 # Scripts
 scripts/
+.gitattributes
+computer_vision/yolo11l.pt
+computer_vision/core/__pycache__/seat_occupancy_detector.cpython-312.pyc
