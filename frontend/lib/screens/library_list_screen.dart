@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import 'library_detail_screen.dart';
+import 'booking_screen.dart';
 
 class LibraryListScreen extends StatefulWidget {
   const LibraryListScreen({super.key});
@@ -82,40 +82,7 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
                   itemCount: libraries.length,
                   itemBuilder: (context, index) {
                     final lib = libraries[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      elevation: 2,
-                      child: ListTile(
-                        leading: const Icon(
-                          Icons.local_library,
-                          color: Colors.teal,
-                          size: 36,
-                        ),
-                        title: Text(
-                          lib['name'] ?? 'Unknown Library',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(lib['location'] ?? 'No location info'),
-                        trailing: Chip(
-                          label: Text('${lib['facility_count']} Facilities'),
-                          backgroundColor: Colors.teal[50],
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => LibraryDetailScreen(
-                                libraryId: lib['id'],
-                                libraryName: lib['name'],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    );
+                    return LibraryListItem(library: lib);
                   },
                 ),
               );
@@ -124,5 +91,186 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
         ),
       ],
     );
+  }
+}
+
+class LibraryListItem extends StatefulWidget {
+  final dynamic library;
+
+  const LibraryListItem({super.key, required this.library});
+
+  @override
+  State<LibraryListItem> createState() => _LibraryListItemState();
+}
+
+class _LibraryListItemState extends State<LibraryListItem> {
+  bool _isExpanded = false;
+  Future<Map<String, dynamic>>? _detailsFuture;
+
+  void _toggleExpand() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+      if (_isExpanded && _detailsFuture == null) {
+        _detailsFuture = ApiService.getLibraryDetails(widget.library['id']);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: _isExpanded ? 4 : 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: _isExpanded
+            ? const BorderSide(color: Colors.teal, width: 2)
+            : BorderSide.none,
+      ),
+      child: Column(
+        children: [
+          ListTile(
+            leading: const Icon(
+              Icons.local_library,
+              color: Colors.teal,
+              size: 36,
+            ),
+            title: Text(
+              widget.library['name'] ?? 'Unknown Library',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Text(widget.library['location'] ?? 'No location info'),
+            trailing: Icon(
+              _isExpanded ? Icons.expand_less : Icons.expand_more,
+              color: _isExpanded ? Colors.teal : Colors.grey,
+            ),
+            onTap: _toggleExpand,
+          ),
+          if (_isExpanded)
+            FutureBuilder<Map<String, dynamic>>(
+              future: _detailsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                } else if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+                  );
+                } else if (!snapshot.hasData) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text('No details available.'),
+                  );
+                }
+
+                final library = snapshot.data!;
+                final facilities = library['facilities'] as List<dynamic>;
+
+                // Group facilities by Type
+                final Map<String, List<dynamic>> groupedFacilities = {};
+                for (var f in facilities) {
+                  final type = f['type'] ?? 'Other';
+                  if (!groupedFacilities.containsKey(type)) {
+                    groupedFacilities[type] = [];
+                  }
+                  groupedFacilities[type]!.add(f);
+                }
+
+                final groupKeys = groupedFacilities.keys.toList();
+                groupKeys.sort();
+
+                if (groupKeys.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text("No facilities available."),
+                  );
+                }
+
+                return ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: groupKeys.length,
+                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final type = groupKeys[index];
+                    final items = groupedFacilities[type]!;
+                    
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                      leading: Icon(
+                        _getFacilityIcon(type),
+                        color: Colors.teal[300],
+                        size: 24,
+                      ),
+                      title: Text(type),
+                      trailing: Chip(
+                        label: Text('${items.length}'),
+                        backgroundColor: Colors.teal[50],
+                        labelStyle: TextStyle(color: Colors.teal[800], fontSize: 12),
+                      ),
+                      onTap: () {
+                        _showFacilitySelectionDialog(context, type, items);
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showFacilitySelectionDialog(
+    BuildContext context,
+    String type,
+    List<dynamic> items,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return SimpleDialog(
+          title: Text("Select $type"),
+          children: items.map((item) {
+            return SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => BookingScreen(
+                      facilityId: item['id'],
+                      facilityName: item['name'],
+                    ),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Text(item['name'], style: const TextStyle(fontSize: 16)),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  IconData _getFacilityIcon(String? type) {
+    switch (type?.toLowerCase()) {
+      case 'room':
+      case 'study room':
+        return Icons.meeting_room;
+      case 'desk':
+        return Icons.desk;
+      case 'computer':
+        return Icons.computer;
+      default:
+        return Icons.chair;
+    }
   }
 }
