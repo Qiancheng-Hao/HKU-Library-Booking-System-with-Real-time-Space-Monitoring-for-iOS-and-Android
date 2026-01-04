@@ -1,0 +1,4 @@
+# requirement library to run the cv model
+conda install -c conda-forge opencv
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+pip install ultralytics
