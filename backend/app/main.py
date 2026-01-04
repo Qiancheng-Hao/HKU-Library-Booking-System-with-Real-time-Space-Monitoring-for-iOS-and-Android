@@ -5,6 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from app import models  # noqa: F401
+from app.models.occupancy import OccupancyLog  # Ensure model is imported for create_all
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.core import security
