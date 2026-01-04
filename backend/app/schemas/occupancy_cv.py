@@ -10,3 +10,22 @@ class OccupancyEstimateResponse(BaseModel):
     total_number_of_seats: int
     occupancy_rate: float
 
+
+class OccupancyVideoFrameResult(OccupancyEstimateResponse):
+    frame_index: int
+    video_time_s: float
+
+
+class OccupancyVideoEstimateSummary(BaseModel):
+    frames: int
+    valid_frames: int
+    avg_occupancy_rate: float
+    max_occupancy_rate: float
+
+
+class OccupancyVideoEstimateResponse(BaseModel):
+    location: str
+    area: str
+    interval_seconds: float
+    results: list[OccupancyVideoFrameResult]
+    summary: OccupancyVideoEstimateSummary
