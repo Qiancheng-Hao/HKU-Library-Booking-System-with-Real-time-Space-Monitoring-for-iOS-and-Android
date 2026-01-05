@@ -178,3 +178,43 @@ class LibraryOccupancyStatistic(Base):
     )
 
 
+class AreaOccupancySnapshot(Base):
+    __tablename__ = "occupancy_area_snapshots"
+    __table_args__ = {"comment": "Near-real-time occupancy snapshots per location+area."}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="Primary key UUID for the snapshot.",
+    )
+    location: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        index=True,
+        comment="Library or building name.",
+    )
+    area: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        index=True,
+        comment="Specific floor or zone.",
+    )
+    occupancy_rate: Mapped[float] = mapped_column(
+        Float, nullable=False, comment="Calculated occupancy ratio (0-1)."
+    )
+    sample_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, comment="Number of log rows aggregated."
+    )
+    window_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="Aggregation window length in seconds."
+    )
+    measured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        index=True,
+        comment="Timestamp when the snapshot was generated.",
+    )
+
+

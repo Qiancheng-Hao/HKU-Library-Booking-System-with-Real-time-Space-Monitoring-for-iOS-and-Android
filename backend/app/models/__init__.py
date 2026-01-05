@@ -2,15 +2,23 @@
 
 from .facility import Facility
 from .library import Library
-from .occupancy import LibraryOccupancySnapshot, LibraryOccupancyStatistic, OccupancyPeriod
+from .occupancy import (
+    AreaOccupancySnapshot,
+    LibraryOccupancySnapshot,
+    LibraryOccupancyStatistic,
+    OccupancyLog,
+    OccupancyPeriod,
+)
 from .reservation import Reservation, ReservationStatus
 from .user import User
 
 __all__ = [
+    "AreaOccupancySnapshot",
     "Facility",
     "Library",
     "LibraryOccupancySnapshot",
     "LibraryOccupancyStatistic",
+    "OccupancyLog",
     "OccupancyPeriod",
     "Reservation",
     "ReservationStatus",

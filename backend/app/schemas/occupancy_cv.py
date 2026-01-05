@@ -29,3 +29,17 @@ class OccupancyVideoEstimateResponse(BaseModel):
     interval_seconds: float
     results: list[OccupancyVideoFrameResult]
     summary: OccupancyVideoEstimateSummary
+
+
+class AreaOccupancyRate(BaseModel):
+    location: str
+    area: str
+    occupancy_rate: float
+    sample_count: int
+    measured_at: str
+
+
+class RealtimeOccupancyResponse(BaseModel):
+    window_seconds: int
+    refresh_seconds: int
+    items: list[AreaOccupancyRate]

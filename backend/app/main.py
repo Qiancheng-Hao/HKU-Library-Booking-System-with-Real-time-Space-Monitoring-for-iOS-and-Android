@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError
@@ -10,6 +12,7 @@ from app.core.config import settings
 from app.core.database import Base, engine
 from app.core import security
 from app.routers import auth, facilities, libraries, occupancy_cv, reservations
+from app.services.occupancy_cv_service import compute_and_store_area_snapshots
 
 Base.metadata.create_all(bind=engine)
 
@@ -64,6 +67,35 @@ app.include_router(libraries.router, prefix=f"/api/{settings.api_version}")
 app.include_router(facilities.router, prefix=f"/api/{settings.api_version}")
 app.include_router(reservations.router, prefix=f"/api/{settings.api_version}")
 app.include_router(occupancy_cv.router, prefix=f"/api/{settings.api_version}")
+
+
+async def _run_occupancy_realtime_loop() -> None:
+    refresh_seconds = max(1, int(settings.occupancy_realtime_refresh_seconds))
+    window_seconds = max(1, int(settings.occupancy_realtime_window_seconds))
+    while True:
+        try:
+            compute_and_store_area_snapshots(window_seconds=window_seconds)
+        except Exception:
+            pass
+        await asyncio.sleep(refresh_seconds)
+
+
+@app.on_event("startup")
+async def start_background_tasks() -> None:
+    if not settings.occupancy_realtime_enabled:
+        return
+    app.state.occupancy_realtime_task = asyncio.create_task(_run_occupancy_realtime_loop())
+
+
+@app.on_event("shutdown")
+async def stop_background_tasks() -> None:
+    task = getattr(app.state, "occupancy_realtime_task", None)
+    if task is not None:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 @app.get("/health", tags=["Health"])

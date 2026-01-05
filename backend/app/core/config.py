@@ -34,6 +34,15 @@ class Settings(BaseSettings):
         default=5,
         description="Expected refresh cadence (minutes) for occupancy snapshots.",
     )
+    occupancy_realtime_enabled: bool = Field(
+        default=True, alias="OCCUPANCY_REALTIME_ENABLED"
+    )
+    occupancy_realtime_refresh_seconds: int = Field(
+        default=10, alias="OCCUPANCY_REALTIME_REFRESH_SECONDS"
+    )
+    occupancy_realtime_window_seconds: int = Field(
+        default=10, alias="OCCUPANCY_REALTIME_WINDOW_SECONDS"
+    )
     secret_key: str = Field(
         default="09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7",
         alias="SECRET_KEY",
