@@ -43,6 +43,21 @@ class Facility(Base):
     slot_interval_minutes: Mapped[int] = mapped_column(
         Integer, default=60, nullable=False, comment="Base slot duration in minutes."
     )
+    floor: Mapped[int] = mapped_column(
+        Integer, default=1, nullable=False, comment="Floor number where the facility is located."
+    )
+    x_coordinate: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, comment="X coordinate on floor plan."
+    )
+    y_coordinate: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, comment="Y coordinate on floor plan."
+    )
+    width: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, comment="Width of the facility on floor plan."
+    )
+    height: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, comment="Height of the facility on floor plan."
+    )
 
     library = relationship(
         "Library",
