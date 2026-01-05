@@ -3,15 +3,18 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 from fastapi import HTTPException, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.models.occupancy import OccupancyLog
+from app.models.occupancy import AreaOccupancySnapshot, OccupancyLog
 
 
 def _repo_root() -> Path:
@@ -116,8 +119,93 @@ def estimate_occupancy_from_image_bytes(
         seat_imgsz=settings.cv_seat_imgsz,
         location=location,
         area=area,
+        hogging_item_class_id=list(range(23)),
+        person_class_id=23,
+        seat_class_id=[56,57]
     )
     return result
+
+
+def save_occupancy_log(
+    db: Session,
+    *,
+    location: str,
+    area: str,
+    stats: dict,
+    source: str | None = None,
+    frame_index: int | None = None,
+) -> None:
+    log_entry = OccupancyLog(
+        location=location,
+        area=area,
+        total_people=int(stats.get("total_number_of_person", 0) or 0),
+        total_hogging=int(stats.get("total_number_of_hogging_items", 0) or 0),
+        total_seats=int(stats.get("total_number_of_seats", 0) or 0),
+        occupancy_rate=float(stats.get("occupancy_rate", -1.0) or -1.0),
+        video_source=source,
+        frame_index=frame_index,
+    )
+    db.add(log_entry)
+
+
+def aggregate_area_occupancy_from_logs(
+    db: Session,
+    *,
+    window_seconds: int,
+    now: datetime | None = None,
+) -> list[dict]:
+    if window_seconds <= 0:
+        raise ValueError("window_seconds must be > 0")
+
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=window_seconds)
+
+    stmt = (
+        select(
+            OccupancyLog.location,
+            OccupancyLog.area,
+            func.avg(OccupancyLog.occupancy_rate).label("avg_rate"),
+            func.count(OccupancyLog.id).label("sample_count"),
+        )
+        .where(
+            OccupancyLog.captured_at >= cutoff,
+            OccupancyLog.location.is_not(None),
+            OccupancyLog.area.is_not(None),
+            OccupancyLog.occupancy_rate >= 0,
+        )
+        .group_by(OccupancyLog.location, OccupancyLog.area)
+        .order_by(OccupancyLog.location.asc(), OccupancyLog.area.asc())
+    )
+
+    rows = db.execute(stmt).all()
+    return [
+        {
+            "location": row.location,
+            "area": row.area,
+            "occupancy_rate": float(row.avg_rate) if row.avg_rate is not None else -1.0,
+            "sample_count": int(row.sample_count or 0),
+        }
+        for row in rows
+    ]
+
+
+def compute_and_store_area_snapshots(*, window_seconds: int) -> int:
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        aggregates = aggregate_area_occupancy_from_logs(db, window_seconds=window_seconds, now=now)
+        for item in aggregates:
+            db.add(
+                AreaOccupancySnapshot(
+                    location=item["location"],
+                    area=item["area"],
+                    occupancy_rate=item["occupancy_rate"],
+                    sample_count=item["sample_count"],
+                    window_seconds=window_seconds,
+                    measured_at=now,
+                )
+            )
+        db.commit()
+        return len(aggregates)
 
 
 def estimate_occupancy_from_video_bytes(
@@ -125,7 +213,7 @@ def estimate_occupancy_from_video_bytes(
     video_bytes: bytes,
     video_filename: str = "video",
     interval_seconds: float = 2.0,
-    max_frames: int | None = 20,
+    max_frames: int | None = None,
     location: str = "",
     area: str = "",
 ) -> dict:
@@ -191,6 +279,9 @@ def estimate_occupancy_from_video_bytes(
                 seat_imgsz=settings.cv_seat_imgsz,
                 location=location,
                 area=area,
+                hogging_item_class_id=list(range(23)),
+                person_class_id=23,
+                seat_class_id=[56,57]
             )
 
             results.append(
@@ -201,24 +292,18 @@ def estimate_occupancy_from_video_bytes(
                 }
             )
 
-            # Save to DB
             try:
                 with SessionLocal() as db:
-                    log_entry = OccupancyLog(
+                    save_occupancy_log(
+                        db,
                         location=location,
                         area=area,
-                        total_people=stats.get("total_number_of_person", 0),
-                        total_hogging=stats.get("total_number_of_hogging_items", 0),
-                        total_seats=stats.get("total_number_of_seats", 0),
-                        occupancy_rate=stats.get("occupancy_rate", -1.0),
-                        video_source=Path(video_filename).name,
+                        stats=stats,
+                        source=Path(video_filename).name,
                         frame_index=frame_index,
                     )
-                    db.add(log_entry)
                     db.commit()
             except Exception:
-                # Log error but don't fail the whole video process
-                # In production, use proper logger
                 print(f"Failed to save log for frame {frame_index}")
 
             sampled += 1

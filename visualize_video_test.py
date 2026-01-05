@@ -108,8 +108,11 @@ def visualize_video_test(
                 visualize=True,
                 output_path=tmp_viz_path,
                 # 使用你指定的参数或默认参数
-                confidence_threshold=0.25, # 调低一点以便看到更多结果
-                seat_expansion_factor=1.5
+                # confidence_threshold=0.25, # 调低一点以便看到更多结果
+                # seat_expansion_factor=1.5
+                hogging_item_class_id=list(range(23)),
+                person_class_id=23,
+                seat_class_id=[56,57]
             )
             
             # 读取可视化后的图片
