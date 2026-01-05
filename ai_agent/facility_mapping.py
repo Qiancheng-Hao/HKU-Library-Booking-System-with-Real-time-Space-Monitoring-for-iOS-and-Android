@@ -1,8 +1,3 @@
-"""
-Facility Mapping - Location and Room Type Codes
-Maps user-friendly names to HKU Library booking system codes.
-Supports multiple aliases for fuzzy matching.
-"""
 from difflib import get_close_matches
 
 # Location codes with multiple aliases for each library
@@ -188,7 +183,6 @@ def get_room_type_code(location_code: str, type_name: str) -> tuple[str | None, 
         - code: Type code if found, None otherwise
         - message: Explanation of the match or error
     """
-    from difflib import get_close_matches
     
     if location_code not in TYPE_MAP:
         return None, f"Invalid location code: {location_code}"
@@ -226,11 +220,9 @@ def get_room_type_code(location_code: str, type_name: str) -> tuple[str | None, 
 def get_room_range_suggestions(location_code: str, type_code: str) -> str:
     """
     Get suggested room number ranges for a facility type.
-    
     Args:
         location_code: Location code
         type_code: Room type code
-    
     Returns:
         Formatted string with room range suggestions
     """

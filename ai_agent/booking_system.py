@@ -18,7 +18,10 @@ from selenium.common.exceptions import (
 from webdriver_manager.chrome import ChromeDriverManager
 
 class OptimizedBookingSystem:
-    def __init__(self, username, password, location, type, date, sessions):
+    def __init__(self, username: str, password: str, location: str, type: str, date: str, sessions: list[str] | str):
+        """
+        Initialize the booking system with user credentials and booking details.
+        """
         self.username = username
         self.password = password
         self.location = location
@@ -38,6 +41,9 @@ class OptimizedBookingSystem:
         self.yes_button_id = 'main_btnSubmitYes'
         
     def create_driver(self):
+        """
+        Create and return a configured Chrome WebDriver instance.
+        """
         chrome_options = webdriver.ChromeOptions()
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -48,37 +54,57 @@ class OptimizedBookingSystem:
         chrome_options.add_argument("--disable-logging")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--headless")
-        
         driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         return driver
     
-    def initialize_multiple_drivers(self, num_drivers=3):
-        print(f"Initializing {num_drivers} browser instances...")
+    def initialize_multiple_drivers(self, num_drivers: int = 3) -> bool:
+        """
+        Initialize multiple Chrome WebDriver instances.
+        Args:
+            num_drivers: Number of browser instances to create
+        Returns:
+            True if all drivers initialized successfully, False otherwise
+        """
+        # print(f"Initializing {num_drivers} browser instances...")
         for i in range(num_drivers):
             try:
                 driver = self.create_driver()
                 self.drivers.append(driver)
-                print(f"Driver {i+1} initialized successfully")
+                #print(f"Driver {i+1} initialized successfully")
             except Exception as e:
-                print(f"Failed to initialize driver {i+1}: {e}")
+                #print(f"Failed to initialize driver {i+1}: {e}")
+                return False
+        return True
     
-    def close_all_drivers(self):
+    def close_all_drivers(self) -> bool:
+        """
+        Close all browser instances.
+        Returns:
+            True if all drivers closed successfully, False otherwise
+        """
         for driver in self.drivers:
             try:
                 driver.quit()
             except:
-                pass
+                return False
         self.drivers.clear()
+        return True
     
-    def pre_login(self, driver):
-        """Pre-login to the booking system"""
+    def pre_login(self, driver) -> bool:
+        """
+        Pre-login to the booking system
+        Args: 
+            driver: Selenium WebDriver instance
+        Returns:
+            True if login successful, False otherwise
+        """
         try:
             # Visit any booking page to trigger login (using the first session)
             test_url = f"{self.base_url}?library={self.location}&ftype={self.type}&facility=999&date={self.date}&session={self.sessions[0]}"
             driver.get(test_url)
             
-            wait = WebDriverWait(driver, 15)
+            wait = WebDriverWait(driver=driver, timeout=15)
 
             # Wait for and fill in login information
             print("Pre-login: Waiting for login form...")
@@ -94,17 +120,23 @@ class OptimizedBookingSystem:
             # Random short sleep to mimic human behavior
             time.sleep(random.uniform(0.1, 0.5))
             login_button.click()
-            
-            print("Pre-login completed successfully")
-            time.sleep(2)
+            time.sleep(1)
             return True
-            
         except Exception as e:
             print(f"Pre-login failed: {e}")
             return False
     
-    def attempt_booking_with_retry(self, driver, room, session, max_retries=3):
-        """Attempt booking with retry mechanism"""
+    def attempt_booking_with_retry(self, driver, room: int, session: int, max_retries: int = 3) -> bool:
+        """
+        Attempt booking with retry mechanism
+        Args:
+            driver: Selenium WebDriver instance
+            room: Room number to book
+            session: Session number to book
+            max_retries: Maximum number of retry attempts
+        Returns:
+            True if booking successful, False otherwise
+        """
         for attempt in range(max_retries):
             try:
                 return self.attempt_single_booking(driver, room, session)
@@ -118,26 +150,32 @@ class OptimizedBookingSystem:
                     return False
         return False
     
-    def attempt_single_booking(self, driver, room, session):
-        """Try to book a single room for a single session"""
+    def attempt_single_booking(self, driver, room: int, session: int) -> bool:
+        """
+        Try to book a single room for a single session
+        Agrs: 
+            driver: Selenium WebDriver instance
+            room: Room number to book
+            session: Session number to book
+        Returns:
+            True if booking successful, False otherwise
+        """
         # Check if there is already a successful booking
         with self.booking_lock:
             if session in self.successful_bookings:
                 return False
-        
         try:
             url = f"{self.base_url}?library={self.location}&ftype={self.type}&facility={room}&date={self.date}&session={session}"
-            
             print(f"Attempting to book room {room} for session {session}...")
             driver.get(url)
 
             # Increase wait time and add debug information
-            wait = WebDriverWait(driver, 10)
+            wait = WebDriverWait(driver=driver, timeout=10)
 
             # Check if the page has loaded correctly
-            time.sleep(2)  # Give the page more time to load
+            time.sleep(1) 
 
-            # Add debug information
+            # debug information
             page_title = driver.title
             current_url = driver.current_url
             print(f"Room {room} session {session}: Page title: {page_title}")
@@ -150,18 +188,16 @@ class OptimizedBookingSystem:
                     input_field = wait.until(EC.presence_of_element_located((By.XPATH, self.username_xpath)))
                     password_field = wait.until(EC.presence_of_element_located((By.XPATH, self.password_xpath)))
                     login_button = wait.until(EC.element_to_be_clickable((By.XPATH, self.login_button_xpath)))
-                    
                     input_field.clear()
                     input_field.send_keys(self.username)
                     password_field.clear()
                     password_field.send_keys(self.password)
                     login_button.click()
-                    time.sleep(3)  # Wait for login to complete
+                    time.sleep(3)  
                     print(f"Room {room} session {session}: Re-login completed")
                 except Exception as e:
                     print(f"Room {room} session {session}: Re-login failed: {e}")
                     return False
-            
             # try to click the submit button
             try:
                 submit_button = wait.until(EC.element_to_be_clickable((By.ID, self.submit_button_id)))
@@ -182,7 +218,7 @@ class OptimizedBookingSystem:
                     # Quick check for success status
                     time.sleep(1)
                     page_source = driver.page_source.lower()
-                    
+                
                     if "success" in page_source or "confirmed" in page_source or "booked" in page_source:
                         with self.booking_lock:
                             if session not in self.successful_bookings:
@@ -205,34 +241,19 @@ class OptimizedBookingSystem:
     
     def concurrent_booking_attempt(self, rooms):
         """Attempt to book rooms concurrently using multiple threads"""
-        total_threads = 3
+        total_threads = 4
         threads_per_session = total_threads // len(self.sessions)
 
         print(f"Starting concurrent booking for {len(rooms)} rooms and {len(self.sessions)} sessions...")
         print(f"Total threads: {total_threads}, threads per session: {threads_per_session}")
 
-        # Initialize enough drivers
-        # required_drivers = min(total_threads, len(rooms) * len(self.sessions))
-        # if len(self.drivers) < required_drivers:
-        #     print(f"Initializing additional drivers... (need {required_drivers}, have {len(self.drivers)})")
-        #     additional_drivers = required_drivers - len(self.drivers)
-        #     for i in range(additional_drivers):
-        #         try:
-        #             driver = self.create_driver()
-        #             self.drivers.append(driver)
-        #             # Pre-login the new driver
-        #             self.pre_login(driver)
-        #             print(f"Additional driver {i+1} initialized and logged in")
-        #         except Exception as e:
-        #             print(f"Failed to initialize additional driver {i+1}: {e}")
-        
         # Create room-driver pairs for each session
         all_tasks = []
         driver_index = 0
         
         for session in self.sessions:
             session_tasks = []
-            for i, room in enumerate(rooms[:threads_per_session]):  # Each session uses a specified number of rooms
+            for i, room in enumerate(rooms[:threads_per_session]): 
                 if driver_index < len(self.drivers):
                     driver = self.drivers[driver_index]
                     session_tasks.append((room, driver, session))

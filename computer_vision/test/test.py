@@ -91,10 +91,12 @@ if __name__ == "__main__":
     """
 
     # Initialize all shared and global parameters
-    SEAT_MODEL_PATH = "../yolo11l.pt" 
-    TEST_FOLDER = "data"
-    RESULT_FOLDER_OCCUPANCY = "standard_model_results"
-    RESULT_FOLDER_SEATS = "standard_model_seats_results"
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    computer_vision_dir = os.path.dirname(test_dir)
+    SEAT_MODEL_PATH = os.path.join(computer_vision_dir, "train_models", "yolo11x.pt")
+    TEST_FOLDER = os.path.join(test_dir, 'data', 'ChiWah')
+    RESULT_FOLDER_OCCUPANCY = os.path.join(test_dir, "standard_model_results")
+    RESULT_FOLDER_SEATS = os.path.join(test_dir, "standard_model_seats_results")
     
     PROXIMITY_THRESHOLD = 150.0  # Distance for person-item association
     ITEM_CLUSTER_THRESHOLD = 70.0 # Distance for item-item clustering
@@ -149,7 +151,8 @@ if __name__ == "__main__":
                 76  # scissors
             ]
             SEAT_CLASS_ID = [56, 57]         # chair and couch
-            OCCUPANCY_MODEL_PATH = "../yolo11l.pt"
+            
+            OCCUPANCY_MODEL_PATH = os.path.join(computer_vision_dir, "train_models", "yolo11x.pt")
             test_model(image_files, PERSON_CLASS_ID, HOGGING_ITEM_CLASS_ID, SEAT_CLASS_ID)
 
             print("\n" + "=" * 80)
@@ -157,19 +160,21 @@ if __name__ == "__main__":
             print("=" * 80)
             input("\nPress Enter to continue to self-trained model testing...")
 
-            RESULT_FOLDER_OCCUPANCY = "self-trained_model_results"
-            RESULT_FOLDER_SEATS = "self-trained_model_seats_results"
+            RESULT_FOLDER_OCCUPANCY = os.path.join(test_dir, "self-trained_model_results")
+            RESULT_FOLDER_SEATS = os.path.join(test_dir, "self-trained_model_seats_results")
             os.makedirs(RESULT_FOLDER_OCCUPANCY, exist_ok=True)
             os.makedirs(RESULT_FOLDER_SEATS, exist_ok=True)
             
             # Testing the self-trained model
-            # v1: 30, v2:23
+            # v1: 30, v2:23, mixed v2:15 
             PERSON_CLASS_ID = 23
-            # v1: 0-29, v2: 0-22
-            HOGGING_ITEM_CLASS_ID = list(range(23)) # hogging_item
-            SEAT_CLASS_ID = [56, 57]         # seat and sofa
-            # SEAT_MODEL_PATH = os.path.join("..", "models", "chair_and_sofa", "best.pt")
+            # v1: 0-29, v2: 0-22, mixed v2: 0-4, 6-14, 16-18
+            HOGGING_ITEM_CLASS_ID = list(range(23))
+            # mixed v2: 5, standard model: 56, 57
+            SEAT_CLASS_ID = [5]
+            SEAT_MODEL_PATH = os.path.join(computer_vision_dir, "models", "mixed", "model_v2", "weights", "best.pt")
             OCCUPANCY_MODEL_PATH = os.path.join("..", "models", "person_and_item", "v2", "best.pt")
+            
             if not os.path.exists(OCCUPANCY_MODEL_PATH):
                 raise FileNotFoundError(f"Self-trained model not found at path: {OCCUPANCY_MODEL_PATH}")
             print("\n" + "=" * 80)

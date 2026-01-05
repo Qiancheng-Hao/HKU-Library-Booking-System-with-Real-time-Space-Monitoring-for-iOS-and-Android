@@ -14,6 +14,7 @@ from facility_mapping import (
 import threading
 import time
 import json
+import asyncio
 
 
 class BookingAgent:
@@ -31,8 +32,7 @@ class BookingAgent:
     
     def __init__(self, github_token: str, model_id: str = "openai/o4-mini"):
         """
-        Initialize the booking agent with GitHub model credentials.
-        
+        Initialize the booking agent
         Args:
             github_token: GitHub personal access token for model access
             model_id: The model ID to use
@@ -40,7 +40,7 @@ class BookingAgent:
         self.github_token = github_token
         self.model_id = model_id
         self.agent = None
-        self.collected_info = {
+        self.collected_info: Dict[str, Optional[str | list[str]]] = {
             "location": None,
             "type": None,
             "rooms": None,
@@ -50,7 +50,7 @@ class BookingAgent:
         self.username = None
         self.password = None
         
-    async def initialize_agent(self):
+    async def initialize_agent(self) -> None:
         """Initialize the AI agent with GitHub model and tools."""
         openai_client = AsyncOpenAI(
             base_url="https://models.github.ai/inference",
@@ -207,9 +207,10 @@ class BookingAgent:
         
     def _convert_location(self, location_name: Annotated[str, "Library location name in natural language (e.g., 'Chi Wah', 'Main Library')"]) -> str:
         """Convert natural language location name to location code using fuzzy matching.
-        
-        This tool automatically stores the location code if found.
-        Supports various forms: 'Chi Wah', 'ChiWah', 'CW', 'CWLC', etc.
+        Args: 
+            location_name: Location name from user
+        Returns:
+            Converted location code message or error message
         """
         code, message = get_location_code(location_name)
         if code:
@@ -220,10 +221,12 @@ class BookingAgent:
             return f"{message}\n\nAvailable locations: {', '.join(LOCATION_NAMES)}"
     
     def _convert_room_type(self, room_type_name: Annotated[str, "Room type name in natural language (e.g., 'study room', 'discussion room')"]) -> str:
-        """Convert natural language room type name to type code using fuzzy matching.
-        
-        This tool automatically stores the type code if found.
-        Requires location to be set first.
+        """
+        Convert natural language room type name to type code using fuzzy matching.
+        Args: 
+            room_type_name: Room type name from user 
+        Returns: 
+            Converted type code message or error message
         """
         location_code = self.collected_info.get("location")
         if not location_code:
@@ -239,20 +242,35 @@ class BookingAgent:
             return f"{message}\n\nPlease check available room types for the selected location."
     
     def _collect_location(self, location: str) -> str:
-        """Collect and store the library location code."""
+        """
+        Collect and store the library location code.
+        Args: 
+            location: Library location code
+        Returns:
+            Confirmation message
+        """
         self.collected_info["location"] = location
         return f"Location: {location} recorded."
     
     def _collect_type(self, room_type: str) -> str:
-        """Collect and store the room type code."""
+        """
+        Collect and store the room type code.
+        Args: 
+            room_type: Room type code
+        Returns:
+            Confirmation message
+        """
         self.collected_info["type"] = room_type
         return f"Room type: {room_type} recorded."
     
-    def _collect_rooms(
-        self,
-        rooms: Annotated[str, "Room numbers as string: single number '258', comma-separated '258,259,260', or range '258-267'"]
-    ) -> str:
-        """Collect and store the room numbers to attempt booking."""
+    def _collect_rooms(self,rooms: Annotated[str, "Room numbers as string: single number '258', comma-separated '258,259,260', or range '258-267'"]) -> str:
+        """
+        Collect and store the room numbers to attempt booking.
+        Args:
+            rooms: Room numbers as string
+        Returns:
+            Confirmation message
+        """
         # Parse room range or list
         room_list = []
         for part in rooms.split(','):
@@ -267,16 +285,18 @@ class BookingAgent:
         self.collected_info["rooms"] = room_list
         return f"Room numbers recorded: {', '.join(room_list)}. The system will attempt to book these rooms in order."
     
-    def _collect_date(
-        self,
-        date: Annotated[str, "Booking date in YYYYMMDD format (e.g., 20251220 for December 20, 2025)"]
-    ) -> str:
-        """Collect and store the booking date."""
+    def _collect_date(self,date: Annotated[str, "Booking date in YYYYMMDD format (e.g., 20251220 for December 20, 2025)"]) -> str:
+        """
+        Collect and store the booking date.
+        Args: 
+            date: Booking date in YYYYMMDD format
+        Returns:
+            Confirmation message or error message
+        """
         # Validate date format
         try:
             datetime.strptime(date, "%Y%m%d")
             self.collected_info["date"] = date
-            # Format date for display
             year = date[:4]
             month = date[4:6]
             day = date[6:8]
@@ -284,11 +304,14 @@ class BookingAgent:
         except ValueError:
             return "Invalid date format. Please provide the date in YYYYMMDD format (e.g., 20251220)."
     
-    def _collect_sessions(
-        self,
-        sessions: Annotated[str, "Time session code or comma-separated list (e.g., '14001500' for 2PM-3PM, or '14001500,15001600' for multiple sessions)"]
-    ) -> str:
-        """Collect and store the time session codes."""
+    def _collect_sessions(self,sessions: Annotated[str, "Time session code or comma-separated list (e.g., '14001500' for 2PM-3PM, or '14001500,15001600' for multiple sessions)"]) -> str:
+        """
+        Collect and store the time session codes.
+        Args:
+            sessions: Time session code or comma-separated list
+        Returns:
+            Confirmation message
+        """
         # Parse single session or multiple sessions
         session_list = [s.strip() for s in sessions.split(',')]
         self.collected_info["sessions"] = session_list
@@ -302,17 +325,28 @@ class BookingAgent:
                 end_hour = session[4:6]
                 end_min = session[6:8]
                 formatted_sessions.append(f"{start_hour}:{start_min}-{end_hour}:{end_min}")
-        
         return f"Time sessions recorded: {', '.join(formatted_sessions)}"
     
     def _collect_credentials(self, username: Annotated[str, "HKU portal UID or library card number"], password: Annotated[str, "Portal password or PIN"]) -> str:
-        """Collect and store user credentials for booking."""
+        """
+        Collect and store user credentials for booking.
+        This function should not be used because the mobile app already stores credentials.
+        Args:
+            username: HKU portal UID or library card number
+            password: Portal password or PIN
+        Returns:
+            Confirmation message
+        """
         self.collected_info["username"] = username
         self.collected_info["password"] = password
         return "Credentials recorded securely."
     
     def _check_information_complete(self) -> str:
-        """Check if all required information has been collected."""
+        """
+        Check if all required information has been collected.
+        Returns:
+            Message indicating missing information or readiness to book
+        """
         missing = []
         for key, value in self.collected_info.items():
             if value is None:
@@ -325,13 +359,14 @@ class BookingAgent:
     def _execute_booking(self) -> str:
         """
         Execute the booking process using OptimizedBookingSystem.
-        Returns a detailed result message.
+        This function will truely perform the booking.
+        Returns: 
+            Message indicating booking result or errors
         """
         # Check if all information is complete
         missing = [k for k, v in self.collected_info.items() if v is None]
         if missing:
             return f"Cannot execute booking. Missing information: {', '.join(missing)}"
-        
         try:
             # Create booking system instance
             booking_system = OptimizedBookingSystem(
@@ -342,7 +377,6 @@ class BookingAgent:
                 date=self.collected_info["date"],
                 sessions=self.collected_info["sessions"]
             )
-            
             # Initialize drivers
             booking_system.initialize_multiple_drivers()
             
@@ -376,7 +410,6 @@ class BookingAgent:
                         time_str = f"{start_hour}:{start_min}-{end_hour}:{end_min}"
                     else:
                         time_str = session
-                    
                     result_message += f"Room {room} booked for session {time_str}\n"
                 
                 if len(booking_system.successful_bookings) == len(self.collected_info["sessions"]):
@@ -398,7 +431,6 @@ class BookingAgent:
                 3. Invalid credentials
                 4. Network connectivity issues
                 5. The booking system is temporarily unavailable
-
                 Please verify your information and try again, or choose a different date/time."""
         except Exception as e:
             return f" An error occurred during booking: {str(e)}\n\nPlease check your information and try again."
@@ -406,11 +438,9 @@ class BookingAgent:
     async def chat(self, user_message: str, thread=None) -> str:
         """
         Process a user message and return the agent's response.
-        
         Args:
             user_message: The user's input message
-            thread: Optional thread for maintaining conversation context
-            
+            thread: Optional thread for maintaining conversation context 
         Returns:
             The agent's response as a string
         """
@@ -425,7 +455,6 @@ class BookingAgent:
         async for chunk in self.agent.run_stream(user_message, thread=thread):
             if chunk.text:
                 response_text += chunk.text
-        
         return response_text
     
     async def start_conversation(self):
@@ -451,10 +480,8 @@ class BookingAgent:
             if user_input.lower() in ['quit', 'exit', 'bye']:
                 print("Booking Agent: Goodbye! Feel free to come back if you need to book again.")
                 break
-            
             if not user_input:
                 continue
-            
             response = await self.chat(user_input, thread=thread)
             print(f"Booking Agent: {response}\n")
     
@@ -485,5 +512,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
