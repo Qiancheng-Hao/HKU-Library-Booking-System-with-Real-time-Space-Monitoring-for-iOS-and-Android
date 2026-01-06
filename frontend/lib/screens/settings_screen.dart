@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
-import 'booking_history_screen.dart';
 import '../providers/auth_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -12,199 +11,180 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  Future<void> _handleLogout(AuthProvider authProvider) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Logout'),
+            content: const Text('Are you sure you want to logout?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Logout'),
+              ),
+            ],
+          ),
+    );
 
-  Future<void> _handleAuth() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (authProvider.isLoggedIn) {
+    if (confirm == true) {
       await authProvider.logout();
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Logged out')));
       }
-    } else {}
+    }
   }
+
+  // Future<void> _testConnection() async {
+  //   try {
+  //     final health = await ApiService.getHealth();
+  //       ScaffoldMessenger.of(context).clearSnackBars();
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(
+  //           content: Text('Backend Connected: ${health['status']}'),
+  //           backgroundColor: Colors.green,
+  //         ),
+  //       );
+  //     }
+  //   } catch (e) {
+  //     if (mounted) {
+  //       ScaffoldMessenger.of(context).clearSnackBars();
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(
+  //           content: Text('Connection Failed: $e'),
+  //           backgroundColor: Colors.red,
+  //         ),
+  //       );
+  //     }
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {
-    // Use Consumer to get isLoggedIn state
     return Consumer<AuthProvider>(
-      builder: (context, authProvider, child) {
-        return Center(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: <Widget>[
-                Container(
-                  margin: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
-                  height: 100,
-                  width: 350,
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(10.0),
-                    border: Border.all(color: Colors.deepPurple, width: 2.0),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'Setting',
-                      style: TextStyle(
-                        color: Colors.deepPurple,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+      builder: (context, auth, child) {
+        return Scaffold(
+          backgroundColor: Colors.grey[50],
+          body: ListView(
+            children: [
+              // Profile Section
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 24,
+                  horizontal: 16,
                 ),
-                Container(
-                  margin: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
-                  height: 100,
-                  width: 350,
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(10.0),
-                    border: Border.all(color: Colors.deepPurple, width: 2.0),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'Privacy Policy',
-                      style: TextStyle(
-                        color: Colors.deepPurple,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                Container(
-                  margin: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
-                  height: 100,
-                  width: 350,
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(10.0),
-                    border: Border.all(color: Colors.deepPurple, width: 2.0),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'Contact Us',
-                      style: TextStyle(
-                        color: Colors.deepPurple,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () async {
-                    try {
-                      final health = await ApiService.getHealth();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).clearSnackBars();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Backend Connected: ${health['status']}',
-                            ),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).clearSnackBars();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Connection Failed: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
-                    height: 100,
-                    width: 350,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(10.0),
-                      border: Border.all(color: Colors.deepPurple, width: 2.0),
-                    ),
-                    child: const Center(
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 36,
+                      backgroundColor: Colors.teal[100],
                       child: Text(
-                        'Test Connection',
+                        auth.userName!.substring(0, 1).toUpperCase(),
                         style: TextStyle(
-                          color: Colors.deepPurple,
-                          fontSize: 20,
+                          fontSize: 32,
                           fontWeight: FontWeight.bold,
+                          color: Colors.teal[800],
                         ),
                       ),
                     ),
-                  ),
-                ),
-                if (authProvider.isLoggedIn)
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const BookingHistoryScreen(),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
-                      height: 100,
-                      width: 350,
-                      decoration: BoxDecoration(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(10.0),
-                        border: Border.all(
-                          color: Colors.deepPurple,
-                          width: 2.0,
-                        ),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'My Reservations',
-                          style: TextStyle(
-                            color: Colors.deepPurple,
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          auth.userName!,
+                          style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
+                      ],
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              _buildSettingItem(
+                icon: Icons.privacy_tip_outlined,
+                title: "Privacy Policy",
+                onTap: () {
+                  // TODO: Navigate to Privacy Policy
+                },
+              ),
+              _buildSettingItem(
+                icon: Icons.mail_outline,
+                title: "Contact Us",
+                onTap: () {
+                  // TODO: Navigate to Contact Us
+                },
+              ),
+              _buildSettingItem(
+                icon: Icons.info_outline,
+                title: "About",
+                onTap: () {
+                  // TODO: Show About Dialog
+                },
+              ),
+
+              // const SizedBox(height: 16),
+
+              // // Diagnostics Section
+              // _buildSettingItem(
+              //   icon: Icons.network_check,
+              //   title: "Test Connection",
+              //   onTap: _testConnection,
+              // ),
+
+              const SizedBox(height: 24),
+
+              // Logout Button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: ElevatedButton(
+                  onPressed: () => _handleLogout(auth),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.red,
+                    elevation: 0,
+                    side: BorderSide(color: Colors.red[100]!),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                GestureDetector(
-                  onTap: _handleAuth,
-                  child: Container(
-                    margin: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 20.0),
-                    height: 100,
-                    width: 350,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(10.0),
-                      border: Border.all(color: Colors.deepPurple, width: 2.0),
-                    ),
-                    child: Center(
-                      child: Text(
-                        authProvider.isLoggedIn ? 'Logout' : 'Login',
-                        style: const TextStyle(
-                          color: Colors.deepPurple,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                  child: const Text(
+                    "Log Out",
+                    style: TextStyle(fontSize: 16),
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 32),
+            ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildSettingItem({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      color: Colors.white,
+      child: ListTile(
+        leading: Icon(icon, color: Colors.teal[600]),
+        title: Text(title),
+        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+        onTap: onTap,
+      ),
     );
   }
 }

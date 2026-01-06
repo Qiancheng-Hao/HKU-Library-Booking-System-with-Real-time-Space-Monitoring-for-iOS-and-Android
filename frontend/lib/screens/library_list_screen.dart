@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import 'booking_screen.dart';
+import 'booking_history_screen.dart';
 
 class LibraryListScreen extends StatefulWidget {
   const LibraryListScreen({super.key});
@@ -26,19 +27,53 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          Container(
+            color: Colors.white,
+            child: const TabBar(
+              tabs: [
+                Tab(text: "Book"),
+                Tab(text: "My Reservations"),
+              ],
+              labelColor: Colors.teal,
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: Colors.teal,
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildLibraryList(),
+                const BookingHistoryScreen(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLibraryList() {
     return Column(
       children: [
         // Header Row
         Container(
-          padding: const EdgeInsets.all(16.0),
           width: double.infinity,
-          color: Colors.grey[200],
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+          ),
+          alignment: Alignment.center,
           child: const Text(
-            "ALL Libraries",
+            "All Libraries",
             style: TextStyle(
-              fontSize: 24,
+              fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Colors.teal,
             ),
             textAlign: TextAlign.center,
           ),
