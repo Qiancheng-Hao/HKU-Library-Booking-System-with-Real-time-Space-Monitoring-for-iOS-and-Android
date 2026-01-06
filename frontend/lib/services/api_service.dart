@@ -275,4 +275,24 @@ class ApiService {
       throw Exception('Error cancelling reservation: $e');
     }
   }
+
+  // --- Occupancy ---
+
+  static Future<Map<String, dynamic>> getRealtimeOccupancy() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/v1/occupancy/realtime'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load occupancy data: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching occupancy data: $e');
+    }
+  }
 }
