@@ -27,6 +27,11 @@ class Library(Base):
     description: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="Long-form description of facilities or services."
     )
+    opening_hours: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Opening hours for the day (e.g., 08:00-22:00).",
+    )
 
     facilities = relationship(
         "Facility",

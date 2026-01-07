@@ -31,15 +31,15 @@ class OccupancyVideoEstimateResponse(BaseModel):
     summary: OccupancyVideoEstimateSummary
 
 
-class AreaOccupancyRate(BaseModel):
-    location: str
-    area: str
-    occupancy_rate: float
-    sample_count: int
-    measured_at: str
+class LibraryOccupancyItem(BaseModel):
+    libraryId: str
+    libraryName: str
+    occupancyRate: float
+    distanceFromUser: float
+    isOpen: bool
+    openingHours: str | None = None
+    lastUpdated: str | None = None
 
 
 class RealtimeOccupancyResponse(BaseModel):
-    window_seconds: int
-    refresh_seconds: int
-    items: list[AreaOccupancyRate]
+    libraries: list[LibraryOccupancyItem]
