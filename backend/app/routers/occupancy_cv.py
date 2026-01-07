@@ -16,12 +16,12 @@ from app.schemas.occupancy_cv import (
     OccupancyVideoEstimateResponse,
     RealtimeOccupancyResponse,
 )
-from app.services.occupancy_cv_service import (
-    aggregate_area_occupancy_from_logs,
-    estimate_occupancy_from_image_bytes,
-    estimate_occupancy_from_video_bytes,
-    save_occupancy_log,
-)
+# from app.services.occupancy_cv_service import (
+#     aggregate_area_occupancy_from_logs,
+#     estimate_occupancy_from_image_bytes,
+#     estimate_occupancy_from_video_bytes,
+#     save_occupancy_log,
+# )
 
 def _parse_lat_lon(value: str | None) -> tuple[float, float] | None:
     if not value:
@@ -91,46 +91,46 @@ def _is_open_at(*, opening_hours: str | None, at: datetime) -> bool:
 
 router = APIRouter(prefix="/occupancy", tags=["Occupancy"])
 
+# not used for users
+# @router.post("/estimate", response_model=OccupancyEstimateResponse)
+# async def estimate_occupancy(
+#     image: UploadFile = File(...),
+#     location: str = Query(default=""),
+#     area: str = Query(default=""),
+# ) -> OccupancyEstimateResponse:
+#     image_bytes = await image.read()
+#     result = estimate_occupancy_from_image_bytes(
+#         image_bytes=image_bytes,
+#         location=location,
+#         area=area,
+#     )
+#     return OccupancyEstimateResponse(**result)
 
-@router.post("/estimate", response_model=OccupancyEstimateResponse)
-async def estimate_occupancy(
-    image: UploadFile = File(...),
-    location: str = Query(default=""),
-    area: str = Query(default=""),
-) -> OccupancyEstimateResponse:
-    image_bytes = await image.read()
-    result = estimate_occupancy_from_image_bytes(
-        image_bytes=image_bytes,
-        location=location,
-        area=area,
-    )
-    return OccupancyEstimateResponse(**result)
-
-
-@router.post("/ingest-frame", response_model=OccupancyEstimateResponse)
-async def ingest_frame(
-    image: UploadFile = File(...),
-    location: str = Query(default=""),
-    area: str = Query(default=""),
-    camera_id: str = Query(default=""),
-    db: Session = Depends(get_db),
-) -> OccupancyEstimateResponse:
-    image_bytes = await image.read()
-    result = estimate_occupancy_from_image_bytes(
-        image_bytes=image_bytes,
-        location=location,
-        area=area,
-    )
-    save_occupancy_log(
-        db,
-        location=location,
-        area=area,
-        stats=result,
-        source=camera_id or None,
-        frame_index=None,
-    )
-    db.commit()
-    return OccupancyEstimateResponse(**result)
+# not used for users
+# @router.post("/ingest-frame", response_model=OccupancyEstimateResponse)
+# async def ingest_frame(
+#     image: UploadFile = File(...),
+#     location: str = Query(default=""),
+#     area: str = Query(default=""),
+#     camera_id: str = Query(default=""),
+#     db: Session = Depends(get_db),
+# ) -> OccupancyEstimateResponse:
+#     image_bytes = await image.read()
+#     result = estimate_occupancy_from_image_bytes(
+#         image_bytes=image_bytes,
+#         location=location,
+#         area=area,
+#     )
+#     save_occupancy_log(
+#         db,
+#         location=location,
+#         area=area,
+#         stats=result,
+#         source=camera_id or None,
+#         frame_index=None,
+#     )
+#     db.commit()
+#     return OccupancyEstimateResponse(**result)
 
 
 @router.get("/occupancy", response_model=RealtimeOccupancyResponse)
@@ -244,22 +244,22 @@ def get_realtime_occupancy(
 
     return RealtimeOccupancyResponse(libraries=results)
 
-
-@router.post("/estimate-video", response_model=OccupancyVideoEstimateResponse)
-async def estimate_occupancy_video(
-    video: UploadFile = File(...),
-    interval_seconds: float = Query(default=2.0, ge=0.1),
-    max_frames: int | None = Query(default=None, ge=1),
-    location: str = Query(default=""),
-    area: str = Query(default=""),
-) -> OccupancyVideoEstimateResponse:
-    video_bytes = await video.read()
-    result = estimate_occupancy_from_video_bytes(
-        video_bytes=video_bytes,
-        video_filename=video.filename or "video",
-        interval_seconds=interval_seconds,
-        max_frames=max_frames,
-        location=location,
-        area=area,
-    )
-    return OccupancyVideoEstimateResponse(**result)
+# not used for users
+# @router.post("/estimate-video", response_model=OccupancyVideoEstimateResponse)
+# async def estimate_occupancy_video(
+#     video: UploadFile = File(...),
+#     interval_seconds: float = Query(default=2.0, ge=0.1),
+#     max_frames: int | None = Query(default=None, ge=1),
+#     location: str = Query(default=""),
+#     area: str = Query(default=""),
+# ) -> OccupancyVideoEstimateResponse:
+#     video_bytes = await video.read()
+#     result = estimate_occupancy_from_video_bytes(
+#         video_bytes=video_bytes,
+#         video_filename=video.filename or "video",
+#         interval_seconds=interval_seconds,
+#         max_frames=max_frames,
+#         location=location,
+#         area=area,
+#     )
+#     return OccupancyVideoEstimateResponse(**result)

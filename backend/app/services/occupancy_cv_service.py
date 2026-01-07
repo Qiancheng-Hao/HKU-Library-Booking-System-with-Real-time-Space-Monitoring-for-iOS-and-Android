@@ -37,8 +37,8 @@ def _is_git_lfs_pointer(path: Path) -> bool:
 
 
 def _resolve_model_paths() -> tuple[str, str]:
-    if settings.cv_occupancy_model_path and settings.cv_seat_model_path:
-        return settings.cv_occupancy_model_path, settings.cv_seat_model_path
+    # if settings.cv_occupancy_model_path and settings.cv_seat_model_path:
+    #     return settings.cv_occupancy_model_path, settings.cv_seat_model_path
 
     root = _repo_root()
     occupancy_model = _pick_existing_path(
@@ -46,8 +46,7 @@ def _resolve_model_paths() -> tuple[str, str]:
         root / "computer_vision" / "models" / "person_and_item" / "v2" / "best.pt",
     )
     seat_model = _pick_existing_path(
-        root / "computer_vision" / "Models" / "chair_and_sofa" / "best.pt",
-        root / "computer_vision" / "models" / "chair_and_sofa" / "best.pt",
+        root / "computer_vision" / "yolo11l.pt"
     )
     return str(occupancy_model), str(seat_model)
 
@@ -98,32 +97,32 @@ def decode_image_bytes(image_bytes: bytes) -> np.ndarray:
     return image
 
 
-def estimate_occupancy_from_image_bytes(
-    *,
-    image_bytes: bytes,
-    location: str = "",
-    area: str = "",
-) -> dict:
-    image = decode_image_bytes(image_bytes)
-    detector = get_detector()
+# def estimate_occupancy_from_image_bytes(
+#     *,
+#     image_bytes: bytes,
+#     location: str = "",
+#     area: str = "",
+# ) -> dict:
+#     image = decode_image_bytes(image_bytes)
+#     detector = get_detector()
 
-    result = detector.get_occupancy_stats_with_seats(
-        image,
-        confidence_threshold=settings.cv_confidence_threshold,
-        proximity_threshold=settings.cv_proximity_threshold,
-        item_cluster_threshold=settings.cv_item_cluster_threshold,
-        seat_expansion_factor=settings.cv_seat_expansion_factor,
-        use_preprocessing=False,
-        visualize=False,
-        imgsz=settings.cv_imgsz,
-        seat_imgsz=settings.cv_seat_imgsz,
-        location=location,
-        area=area,
-        hogging_item_class_id=list(range(23)),
-        person_class_id=23,
-        seat_class_id=[56,57]
-    )
-    return result
+#     result = detector.get_occupancy_stats_with_seats(
+#         image,
+#         confidence_threshold=settings.cv_confidence_threshold,
+#         proximity_threshold=settings.cv_proximity_threshold,
+#         item_cluster_threshold=settings.cv_item_cluster_threshold,
+#         seat_expansion_factor=settings.cv_seat_expansion_factor,
+#         use_preprocessing=False,
+#         visualize=False,
+#         imgsz=settings.cv_imgsz,
+#         seat_imgsz=settings.cv_seat_imgsz,
+#         location=location,
+#         area=area,
+#         hogging_item_class_id=list(range(23)),
+#         person_class_id=23,
+#         seat_class_id=[56,57]
+#     )
+#     return result
 
 
 def estimate_occupancy_from_frame(
@@ -279,135 +278,135 @@ def run_camera_capture_cycle(*, default_interval_seconds: int) -> int:
     return captured
 
 
-def estimate_occupancy_from_video_bytes(
-    *,
-    video_bytes: bytes,
-    video_filename: str = "video",
-    interval_seconds: float = 2.0,
-    max_frames: int | None = None,
-    location: str = "",
-    area: str = "",
-) -> dict:
-    import cv2
+# def estimate_occupancy_from_video_bytes(
+#     *,
+#     video_bytes: bytes,
+#     video_filename: str = "video",
+#     interval_seconds: float = 2.0,
+#     max_frames: int | None = None,
+#     location: str = "",
+#     area: str = "",
+# ) -> dict:
+#     import cv2
 
-    if not np.isfinite(interval_seconds):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="interval_seconds must be a finite number.",
-        )
-    if interval_seconds <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="interval_seconds must be > 0.",
-        )
-    if max_frames is not None and max_frames <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="max_frames must be > 0 when provided.",
-        )
+#     if not np.isfinite(interval_seconds):
+#         raise HTTPException(
+#             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+#             detail="interval_seconds must be a finite number.",
+#         )
+#     if interval_seconds <= 0:
+#         raise HTTPException(
+#             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+#             detail="interval_seconds must be > 0.",
+#         )
+#     if max_frames is not None and max_frames <= 0:
+#         raise HTTPException(
+#             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+#             detail="max_frames must be > 0 when provided.",
+#         )
 
-    suffix = Path(video_filename).suffix or ".mp4"
-    tmp_path: str | None = None
-    cap = None
+#     suffix = Path(video_filename).suffix or ".mp4"
+#     tmp_path: str | None = None
+#     cap = None
 
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp.write(video_bytes)
-            tmp_path = tmp.name
+#     try:
+#         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+#             tmp.write(video_bytes)
+#             tmp_path = tmp.name
 
-        cap = cv2.VideoCapture(tmp_path)
-        if not cap.isOpened():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or unsupported video file.",
-            )
+#         cap = cv2.VideoCapture(tmp_path)
+#         if not cap.isOpened():
+#             raise HTTPException(
+#                 status_code=status.HTTP_400_BAD_REQUEST,
+#                 detail="Invalid or unsupported video file.",
+#             )
 
-        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
-        if fps <= 0:
-            fps = 25.0
+#         fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+#         if fps <= 0:
+#             fps = 25.0
 
-        frame_step = max(1, int(round(fps * interval_seconds)))
-        detector = get_detector()
+#         frame_step = max(1, int(round(fps * interval_seconds)))
+#         detector = get_detector()
 
-        results: list[dict] = []
-        frame_index = 0
-        sampled = 0
-        while True:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-            ok, frame = cap.read()
-            if not ok:
-                break
+#         results: list[dict] = []
+#         frame_index = 0
+#         sampled = 0
+#         while True:
+#             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+#             ok, frame = cap.read()
+#             if not ok:
+#                 break
 
-            stats = detector.get_occupancy_stats_with_seats(
-                frame,
-                confidence_threshold=settings.cv_confidence_threshold,
-                proximity_threshold=settings.cv_proximity_threshold,
-                item_cluster_threshold=settings.cv_item_cluster_threshold,
-                seat_expansion_factor=settings.cv_seat_expansion_factor,
-                use_preprocessing=False,
-                visualize=False,
-                imgsz=settings.cv_imgsz,
-                seat_imgsz=settings.cv_seat_imgsz,
-                location=location,
-                area=area,
-                hogging_item_class_id=list(range(23)),
-                person_class_id=23,
-                seat_class_id=[56,57]
-            )
+#             stats = detector.get_occupancy_stats_with_seats(
+#                 frame,
+#                 confidence_threshold=settings.cv_confidence_threshold,
+#                 proximity_threshold=settings.cv_proximity_threshold,
+#                 item_cluster_threshold=settings.cv_item_cluster_threshold,
+#                 seat_expansion_factor=settings.cv_seat_expansion_factor,
+#                 use_preprocessing=False,
+#                 visualize=False,
+#                 imgsz=settings.cv_imgsz,
+#                 seat_imgsz=settings.cv_seat_imgsz,
+#                 location=location,
+#                 area=area,
+#                 hogging_item_class_id=list(range(23)),
+#                 person_class_id=23,
+#                 seat_class_id=[56,57]
+#             )
 
-            results.append(
-                {
-                    "frame_index": frame_index,
-                    "video_time_s": frame_index / fps,
-                    **stats,
-                }
-            )
+#             results.append(
+#                 {
+#                     "frame_index": frame_index,
+#                     "video_time_s": frame_index / fps,
+#                     **stats,
+#                 }
+#             )
 
-            try:
-                with SessionLocal() as db:
-                    save_occupancy_log(
-                        db,
-                        location=location,
-                        area=area,
-                        stats=stats,
-                        source=Path(video_filename).name,
-                        frame_index=frame_index,
-                    )
-                    db.commit()
-            except Exception:
-                print(f"Failed to save log for frame {frame_index}")
+#             try:
+#                 with SessionLocal() as db:
+#                     save_occupancy_log(
+#                         db,
+#                         location=location,
+#                         area=area,
+#                         stats=stats,
+#                         source=Path(video_filename).name,
+#                         frame_index=frame_index,
+#                     )
+#                     db.commit()
+#             except Exception:
+#                 print(f"Failed to save log for frame {frame_index}")
 
-            sampled += 1
-            if max_frames is not None and sampled >= max_frames:
-                break
-            frame_index += frame_step
+#             sampled += 1
+#             if max_frames is not None and sampled >= max_frames:
+#                 break
+#             frame_index += frame_step
 
-        if not results:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No frames could be decoded from the video.",
-            )
+#         if not results:
+#             raise HTTPException(
+#                 status_code=status.HTTP_400_BAD_REQUEST,
+#                 detail="No frames could be decoded from the video.",
+#             )
 
-        valid_rates = [r["occupancy_rate"] for r in results if r.get("occupancy_rate", -1) >= 0]
-        summary = {
-            "frames": len(results),
-            "valid_frames": len(valid_rates),
-            "avg_occupancy_rate": float(sum(valid_rates) / len(valid_rates)) if valid_rates else -1.0,
-            "max_occupancy_rate": float(max(valid_rates)) if valid_rates else -1.0,
-        }
+#         valid_rates = [r["occupancy_rate"] for r in results if r.get("occupancy_rate", -1) >= 0]
+#         summary = {
+#             "frames": len(results),
+#             "valid_frames": len(valid_rates),
+#             "avg_occupancy_rate": float(sum(valid_rates) / len(valid_rates)) if valid_rates else -1.0,
+#             "max_occupancy_rate": float(max(valid_rates)) if valid_rates else -1.0,
+#         }
 
-        return {
-            "location": location,
-            "area": area,
-            "interval_seconds": interval_seconds,
-            "results": results,
-            "summary": summary,
-        }
-    finally:
-        if cap is not None:
-            cap.release()
-        if tmp_path is not None:
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
+#         return {
+#             "location": location,
+#             "area": area,
+#             "interval_seconds": interval_seconds,
+#             "results": results,
+#             "summary": summary,
+#         }
+#     finally:
+#         if cap is not None:
+#             cap.release()
+#         if tmp_path is not None:
+#             try:
+#                 os.remove(tmp_path)
+#             except OSError:
+#                 pass

@@ -60,15 +60,15 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(
         default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES"
     )
-
-    cv_occupancy_model_path: str | None = Field(
-        default=None,
-        alias="CV_OCCUPANCY_MODEL_PATH",
-    )
-    cv_seat_model_path: str | None = Field(
-        default=None,
-        alias="CV_SEAT_MODEL_PATH",
-    )
+    # cv_model_paths are determined by service
+    # cv_occupancy_model_path: str | None = Field(
+    #     default=None,
+    #     alias="CV_OCCUPANCY_MODEL_PATH",
+    # )
+    # cv_seat_model_path: str | None = Field(
+    #     default=None,
+    #     alias="CV_SEAT_MODEL_PATH",
+    # )
     cv_device: str = Field(default="auto", alias="CV_DEVICE")
     cv_confidence_threshold: float = Field(default=0.5, alias="CV_CONFIDENCE_THRESHOLD")
     cv_proximity_threshold: float = Field(default=100.0, alias="CV_PROXIMITY_THRESHOLD")
