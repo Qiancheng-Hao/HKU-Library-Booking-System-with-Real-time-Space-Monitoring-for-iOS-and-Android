@@ -4,6 +4,7 @@ from .facility import Facility
 from .library import Library
 from .occupancy import (
     AreaOccupancySnapshot,
+    CameraSource,
     LibraryOccupancySnapshot,
     LibraryOccupancyStatistic,
     OccupancyLog,
@@ -14,6 +15,7 @@ from .user import User
 
 __all__ = [
     "AreaOccupancySnapshot",
+    "CameraSource",
     "Facility",
     "Library",
     "LibraryOccupancySnapshot",

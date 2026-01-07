@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.models.occupancy import AreaOccupancySnapshot, OccupancyLog
+from app.models.occupancy import AreaOccupancySnapshot, CameraSource, OccupancyLog
 
 
 def _repo_root() -> Path:
@@ -126,6 +126,32 @@ def estimate_occupancy_from_image_bytes(
     return result
 
 
+def estimate_occupancy_from_frame(
+    *,
+    frame: np.ndarray,
+    location: str = "",
+    area: str = "",
+) -> dict:
+    detector = get_detector()
+    result = detector.get_occupancy_stats_with_seats(
+        frame,
+        confidence_threshold=settings.cv_confidence_threshold,
+        proximity_threshold=settings.cv_proximity_threshold,
+        item_cluster_threshold=settings.cv_item_cluster_threshold,
+        seat_expansion_factor=settings.cv_seat_expansion_factor,
+        use_preprocessing=False,
+        visualize=False,
+        imgsz=settings.cv_imgsz,
+        seat_imgsz=settings.cv_seat_imgsz,
+        location=location,
+        area=area,
+        hogging_item_class_id=list(range(23)),
+        person_class_id=23,
+        seat_class_id=[56,57]
+    )
+    return result
+
+
 def save_occupancy_log(
     db: Session,
     *,
@@ -206,6 +232,51 @@ def compute_and_store_area_snapshots(*, window_seconds: int) -> int:
             )
         db.commit()
         return len(aggregates)
+
+
+def run_camera_capture_cycle(*, default_interval_seconds: int) -> int:
+    import cv2
+
+    now = datetime.now(timezone.utc)
+    captured = 0
+    with SessionLocal() as db:
+        cameras = (
+            db.execute(select(CameraSource).where(CameraSource.enabled.is_(True)))
+            .scalars()
+            .all()
+        )
+        for camera in cameras:
+            interval = int(camera.capture_interval_seconds or default_interval_seconds or 1)
+            last = camera.last_captured_at
+            due = last is None
+            if last is not None:
+                last_aware = last.replace(tzinfo=timezone.utc) if last.tzinfo is None else last.astimezone(timezone.utc)
+                due = (now - last_aware).total_seconds() >= interval
+            if not due:
+                continue
+
+            cap = cv2.VideoCapture(camera.stream_url)
+            try:
+                ok, frame = cap.read()
+            finally:
+                cap.release()
+            if not ok or frame is None:
+                continue
+
+            stats = estimate_occupancy_from_frame(frame=frame, location=camera.location, area=camera.area)
+            save_occupancy_log(
+                db,
+                location=camera.location,
+                area=camera.area,
+                stats=stats,
+                source=camera.name,
+                frame_index=None,
+            )
+            camera.last_captured_at = now
+            db.add(camera)
+            db.commit()
+            captured += 1
+    return captured
 
 
 def estimate_occupancy_from_video_bytes(

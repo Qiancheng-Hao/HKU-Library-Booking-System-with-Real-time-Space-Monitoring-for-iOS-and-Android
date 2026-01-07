@@ -12,7 +12,10 @@ from app.core.config import settings
 from app.core.database import Base, engine
 from app.core import security
 from app.routers import auth, facilities, libraries, occupancy_cv, reservations
-from app.services.occupancy_cv_service import compute_and_store_area_snapshots
+from app.services.occupancy_cv_service import (
+    compute_and_store_area_snapshots,
+    run_camera_capture_cycle,
+)
 
 Base.metadata.create_all(bind=engine)
 
@@ -68,7 +71,7 @@ app.include_router(facilities.router, prefix=f"/api/{settings.api_version}")
 app.include_router(reservations.router, prefix=f"/api/{settings.api_version}")
 app.include_router(occupancy_cv.router, prefix=f"/api/{settings.api_version}")
 
-
+# log to area snapshots
 async def _run_occupancy_realtime_loop() -> None:
     refresh_seconds = max(1, int(settings.occupancy_realtime_refresh_seconds))
     window_seconds = max(1, int(settings.occupancy_realtime_window_seconds))
@@ -79,17 +82,39 @@ async def _run_occupancy_realtime_loop() -> None:
             pass
         await asyncio.sleep(refresh_seconds)
 
+# camera to log
+async def _run_camera_capture_loop() -> None:
+    poll_seconds = max(1, int(settings.camera_capture_poll_seconds))
+    default_interval_seconds = max(1, int(settings.camera_capture_interval_seconds))
+    while True:
+        try:
+            await asyncio.to_thread(
+                run_camera_capture_cycle,
+                default_interval_seconds=default_interval_seconds,
+            )
+        except Exception:
+            pass
+        await asyncio.sleep(poll_seconds)
+
 
 @app.on_event("startup")
 async def start_background_tasks() -> None:
-    if not settings.occupancy_realtime_enabled:
-        return
-    app.state.occupancy_realtime_task = asyncio.create_task(_run_occupancy_realtime_loop())
+    if settings.occupancy_realtime_enabled:
+        app.state.occupancy_realtime_task = asyncio.create_task(_run_occupancy_realtime_loop())
+    if settings.camera_capture_enabled:
+        app.state.camera_capture_task = asyncio.create_task(_run_camera_capture_loop())
 
 
 @app.on_event("shutdown")
 async def stop_background_tasks() -> None:
     task = getattr(app.state, "occupancy_realtime_task", None)
+    if task is not None:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    task = getattr(app.state, "camera_capture_task", None)
     if task is not None:
         task.cancel()
         try:
