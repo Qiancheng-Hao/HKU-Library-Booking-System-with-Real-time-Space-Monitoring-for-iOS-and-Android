@@ -387,10 +387,12 @@ class _LibraryListItemState extends State<LibraryListItem> {
                               final h = (item['height'] ?? 0) as int;
 
                               // Update bounds if this item goes outside current bounds
-                              if (x + w > mapBaseWidth)
+                              if (x + w > mapBaseWidth) {
                                 mapBaseWidth = (x + w).toDouble();
-                              if (y + h > mapBaseHeight)
+                              }
+                              if (y + h > mapBaseHeight) {
                                 mapBaseHeight = (y + h).toDouble();
+                              }
                             }
 
                             // Add a small padding (e.g. 5%) to the bounds so items aren't glued to the edge
