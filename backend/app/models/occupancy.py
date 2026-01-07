@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
@@ -215,6 +215,67 @@ class AreaOccupancySnapshot(Base):
         nullable=False,
         index=True,
         comment="Timestamp when the snapshot was generated.",
+    )
+
+
+class CameraSource(Base):
+    __tablename__ = "camera_sources"
+    __table_args__ = {"comment": "Camera streams used for periodic CV ingestion."}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="Primary key UUID for the camera source.",
+    )
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        unique=True,
+        index=True,
+        comment="Logical camera identifier.",
+    )
+    stream_url: Mapped[str] = mapped_column(
+        String(1024),
+        nullable=False,
+        comment="Stream URL (e.g., rtsp/http/file path).",
+    )
+    location: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+        comment="Library or building name.",
+    )
+    area: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+        comment="Specific floor or zone.",
+    )
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        index=True,
+        comment="Whether this camera is enabled for ingestion.",
+    )
+    capture_interval_seconds: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=5,
+        comment="Capture interval seconds for this camera.",
+    )
+    last_captured_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+        comment="Last successful capture timestamp.",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        comment="When this camera source was created.",
     )
 
 
