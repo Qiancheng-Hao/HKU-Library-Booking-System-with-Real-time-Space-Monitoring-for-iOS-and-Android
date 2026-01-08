@@ -38,7 +38,6 @@ def get_facility_timeslots(
         .where(
             Reservation.facility_id == facility_id,
             Reservation.reservation_date == target_date,
-            Reservation.status != ReservationStatus.cancelled,
         )
     )
     reservations = db.execute(stmt).scalars().all()

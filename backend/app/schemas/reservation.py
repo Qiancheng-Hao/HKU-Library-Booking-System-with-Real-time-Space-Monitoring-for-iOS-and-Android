@@ -37,7 +37,6 @@ class ReservationPublic(BaseModel):
     status: ReservationStatus
     notes: str | None = None
     created_at: datetime
-    cancelled_at: datetime | None = None
     facility: FacilitySummary
     user: User
 

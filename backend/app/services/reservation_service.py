@@ -6,6 +6,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import uuid
+
 from app.core.config import settings
 from app.models import Facility, Reservation, ReservationStatus, User
 
@@ -43,10 +45,12 @@ class ReservationService:
         duration = datetime.combine(date.min, end_time) - datetime.combine(date.min, start_time)
         slot_minutes = int(duration.total_seconds() // 60)
         if slot_minutes % facility.slot_interval_minutes != 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Reservation duration must align with facility slot interval.",
-            )
+            # Allow non-standard duration if it ends exactly at closing time (truncated slot)
+            if end_time != facility.close_time:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Reservation duration must align with facility slot interval.",
+                )
 
     def ensure_slot_available(
         self,
@@ -60,7 +64,6 @@ class ReservationService:
             .where(
                 Reservation.facility_id == facility_id,
                 Reservation.reservation_date == reservation_date,
-                Reservation.status != ReservationStatus.cancelled,
                 Reservation.start_time < end_time,
                 Reservation.end_time > start_time,
             )
@@ -71,6 +74,30 @@ class ReservationService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Time slot already reserved.",
+            )
+
+    def ensure_user_has_no_overlap(
+        self,
+        user_id: uuid.UUID,
+        reservation_date: date,
+        start_time: time,
+        end_time: time,
+    ) -> None:
+        overlap_stmt = (
+            select(Reservation)
+            .where(
+                Reservation.user_id == user_id,
+                Reservation.reservation_date == reservation_date,
+                Reservation.start_time < end_time,
+                Reservation.end_time > start_time,
+            )
+            .limit(1)
+        )
+        overlap = self.db.execute(overlap_stmt).scalar_one_or_none()
+        if overlap:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="You already have a reservation during this time.",
             )
 
     def get_or_create_user(self, *, full_name: str, email: str) -> User:
@@ -105,15 +132,6 @@ class ReservationService:
                 detail=f"Reservations can be made up to {settings.reservation_lead_days} days in advance.",
             )
 
-    def cancel_reservation(self, reservation: Reservation) -> Reservation:
-        if reservation.status == ReservationStatus.cancelled:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Reservation already cancelled.",
-            )
-
-        reservation.status = ReservationStatus.cancelled
-        reservation.cancelled_at = datetime.now(timezone.utc)
-        self.db.add(reservation)
-        return reservation
+    def cancel_reservation(self, reservation: Reservation) -> None:
+        self.db.delete(reservation)
 

@@ -77,8 +77,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
             child: const TabBar(
               tabs: [
                 Tab(text: 'All'),
-                Tab(text: 'Confirmed'),
-                Tab(text: 'Cancelled'),
+                Tab(text: 'Upcoming'),
+                Tab(text: 'History'),
               ],
               indicatorColor: Colors.teal,
               indicatorSize: TabBarIndicatorSize.label,
@@ -101,19 +101,33 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
 
                 final reservations = snapshot.data!;
 
-                Widget buildList(String? statusFilter) {
-                  final filtered = statusFilter == null
-                      ? reservations
-                      : reservations
-                            .where((r) => r['status'] == statusFilter)
-                            .toList();
+                Widget buildList(List<String>? statusFilters) {
+                  List<dynamic> filtered;
+                  if (statusFilters == null) {
+                    final upcoming = reservations
+                        .where(
+                          (r) => ['confirmed', 'pending'].contains(r['status']),
+                        )
+                        .toList();
+                    final history = reservations
+                        .where(
+                          (r) =>
+                              !['confirmed', 'pending'].contains(r['status']),
+                        )
+                        .toList();
+                    filtered = [...upcoming, ...history];
+                  } else {
+                    filtered = reservations
+                        .where((r) => statusFilters.contains(r['status']))
+                        .toList();
+                  }
 
                   if (filtered.isEmpty) {
                     return Center(
                       child: Text(
-                        statusFilter == null
+                        statusFilters == null
                             ? "No reservations found."
-                            : "No $statusFilter reservations.",
+                            : "No reservations found in this category.",
                       ),
                     );
                   }
@@ -180,8 +194,9 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                                   padding: const EdgeInsets.only(bottom: 8.0),
                                   child: Center(
                                     child: TextButton(
-                                      onPressed: () =>
-                                          _showCancelDialog(res['id'].toString()),
+                                      onPressed: () => _showCancelDialog(
+                                        res['id'].toString(),
+                                      ),
                                       style: TextButton.styleFrom(
                                         foregroundColor: Colors.red,
                                       ),
@@ -200,8 +215,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                 return TabBarView(
                   children: [
                     buildList(null),
-                    buildList('confirmed'),
-                    buildList('cancelled'),
+                    buildList(['confirmed', 'pending']),
+                    buildList(['finished', 'claimed', 'unclaimed']),
                   ],
                 );
               },
