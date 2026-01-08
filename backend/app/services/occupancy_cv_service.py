@@ -185,10 +185,12 @@ def aggregate_area_occupancy_from_logs(
     now = now or datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=window_seconds)
 
+    source_expr = func.coalesce(OccupancyLog.video_source, "")
     stmt = (
         select(
             OccupancyLog.location,
             OccupancyLog.area,
+            source_expr.label("source"),
             func.avg(OccupancyLog.occupancy_rate).label("avg_rate"),
             func.count(OccupancyLog.id).label("sample_count"),
         )
@@ -198,20 +200,38 @@ def aggregate_area_occupancy_from_logs(
             OccupancyLog.area.is_not(None),
             OccupancyLog.occupancy_rate >= 0,
         )
-        .group_by(OccupancyLog.location, OccupancyLog.area)
+        .group_by(OccupancyLog.location, OccupancyLog.area, source_expr)
         .order_by(OccupancyLog.location.asc(), OccupancyLog.area.asc())
     )
 
     rows = db.execute(stmt).all()
-    return [
-        {
-            "location": row.location,
-            "area": row.area,
-            "occupancy_rate": float(row.avg_rate) if row.avg_rate is not None else -1.0,
-            "sample_count": int(row.sample_count or 0),
-        }
-        for row in rows
-    ]
+    by_area: dict[tuple[str, str], list[tuple[float, int]]] = {}
+    for row in rows:
+        location = str(row.location)
+        area = str(row.area)
+        avg_rate = float(row.avg_rate) if row.avg_rate is not None else -1.0
+        sample_count = int(row.sample_count or 0)
+        if avg_rate < 0:
+            continue
+        by_area.setdefault((location, area), []).append((avg_rate, sample_count))
+
+    aggregates: list[dict] = []
+    for (location, area), camera_rates in by_area.items():
+        if not camera_rates:
+            continue
+        combined_rate = sum(r for r, _ in camera_rates) / len(camera_rates)
+        total_samples = sum(c for _, c in camera_rates)
+        aggregates.append(
+            {
+                "location": location,
+                "area": area,
+                "occupancy_rate": float(combined_rate),
+                "sample_count": int(total_samples),
+            }
+        )
+
+    aggregates.sort(key=lambda x: (x["location"], x["area"]))
+    return aggregates
 
 
 def compute_and_store_area_snapshots(*, window_seconds: int) -> int:
