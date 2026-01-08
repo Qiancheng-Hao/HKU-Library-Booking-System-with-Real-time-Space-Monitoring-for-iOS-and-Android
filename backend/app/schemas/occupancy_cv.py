@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -43,3 +45,14 @@ class LibraryOccupancyItem(BaseModel):
 
 class RealtimeOccupancyResponse(BaseModel):
     libraries: list[LibraryOccupancyItem]
+
+
+class RealtimeOccupancyRequest(BaseModel):
+    latitude: float
+    longitude: float
+    radius: float = 1000
+    capacityThreshold: float | None = None
+    openNow: bool | None = None
+    maxResults: int = 10
+    time: datetime | None = None
+    sortBy: str | None = None

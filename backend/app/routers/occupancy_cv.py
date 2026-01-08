@@ -2,7 +2,7 @@ import math
 from datetime import datetime, time as time_type, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Query, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.schemas.occupancy_cv import (
     LibraryOccupancyItem,
     OccupancyEstimateResponse,
     OccupancyVideoEstimateResponse,
+    RealtimeOccupancyRequest,
     RealtimeOccupancyResponse,
 )
 # from app.services.occupancy_cv_service import (
@@ -133,22 +134,11 @@ router = APIRouter(prefix="/occupancy", tags=["Occupancy"])
 #     return OccupancyEstimateResponse(**result)
 
 
-@router.get("/occupancy", response_model=RealtimeOccupancyResponse)
-def get_realtime_occupancy(
-    latitude: float = Query(..., description="User's latitude"),
-    longitude: float = Query(..., description="User's longitude"),
-    radius: float = Query(default=1000, description="Search radius in meters"),
-    capacityThreshold: float | None = Query(
-        default=None,
-        description="Only return libraries with occupancy rate below this threshold (0-100)",
-    ),
-    openNow: bool | None = Query(default=None, description="Whether to return only currently open libraries"),
-    maxResults: int = Query(default=10, ge=1, description="Maximum number of results to return"),
-    time: datetime | None = Query(default=None, description="Query occupancy rate for a specific time"),
-    sortBy: str | None = Query(default=None, description="Sorting method: distance or occupancyRate"),
-    db: Session = Depends(get_db),
+def _get_realtime_occupancy_impl(
+    req: RealtimeOccupancyRequest,
+    db: Session,
 ) -> RealtimeOccupancyResponse:
-    at = time or datetime.now(timezone.utc)
+    at = req.time or datetime.now(timezone.utc)
 
     libraries = db.execute(select(Library).order_by(Library.name.asc())).scalars().all()
 
@@ -187,12 +177,12 @@ def get_realtime_occupancy(
         if coords is None:
             continue
         lib_lat, lib_lon = coords
-        distance_m = _haversine_m(latitude, longitude, lib_lat, lib_lon)
-        if radius is not None and radius >= 0 and distance_m > float(radius):
+        distance_m = _haversine_m(req.latitude, req.longitude, lib_lat, lib_lon)
+        if req.radius is not None and req.radius >= 0 and distance_m > float(req.radius):
             continue
 
         is_open = _is_open_at(opening_hours=lib.opening_hours, at=at)
-        if openNow is True and not is_open:
+        if req.openNow is True and not is_open:
             continue
 
         area_rows = by_location.get(lib.name, [])
@@ -217,9 +207,9 @@ def get_realtime_occupancy(
             last_updated = None
 
         occupancy_percent = rate_0_1 * 100.0 if rate_0_1 >= 0 else -1.0
-        if capacityThreshold is not None and occupancy_percent >= 0 and occupancy_percent >= float(capacityThreshold):
+        if req.capacityThreshold is not None and occupancy_percent >= 0 and occupancy_percent >= float(req.capacityThreshold):
             continue
-        if capacityThreshold is not None and occupancy_percent < 0:
+        if req.capacityThreshold is not None and occupancy_percent < 0:
             continue
 
         results.append(
@@ -234,15 +224,51 @@ def get_realtime_occupancy(
             )
         )
 
-    if sortBy == "occupancyRate":
+    if req.sortBy == "occupancyRate":
         results.sort(key=lambda x: (x.occupancyRate < 0, x.occupancyRate))
     else:
         results.sort(key=lambda x: x.distanceFromUser)
 
-    if maxResults is not None and maxResults >= 0:
-        results = results[: int(maxResults)]
+    if req.maxResults is not None and req.maxResults >= 0:
+        results = results[: int(req.maxResults)]
 
     return RealtimeOccupancyResponse(libraries=results)
+
+
+@router.post("/occupancy", response_model=RealtimeOccupancyResponse)
+def get_realtime_occupancy(
+    req: RealtimeOccupancyRequest = Body(...),
+    db: Session = Depends(get_db),
+) -> RealtimeOccupancyResponse:
+    return _get_realtime_occupancy_impl(req, db)
+
+
+# @router.get("/occupancy", response_model=RealtimeOccupancyResponse)
+# def get_realtime_occupancy_query(
+#     latitude: float = Query(..., description="User's latitude"),
+#     longitude: float = Query(..., description="User's longitude"),
+#     radius: float = Query(default=1000, description="Search radius in meters"),
+#     capacityThreshold: float | None = Query(
+#         default=None,
+#         description="Only return libraries with occupancy rate below this threshold (0-100)",
+#     ),
+#     openNow: bool | None = Query(default=None, description="Whether to return only currently open libraries"),
+#     maxResults: int = Query(default=10, ge=1, description="Maximum number of results to return"),
+#     time: datetime | None = Query(default=None, description="Query occupancy rate for a specific time"),
+#     sortBy: str | None = Query(default=None, description="Sorting method: distance or occupancyRate"),
+#     db: Session = Depends(get_db),
+# ) -> RealtimeOccupancyResponse:
+#     req = RealtimeOccupancyRequest(
+#         latitude=latitude,
+#         longitude=longitude,
+#         radius=radius,
+#         capacityThreshold=capacityThreshold,
+#         openNow=openNow,
+#         maxResults=maxResults,
+#         time=time,
+#         sortBy=sortBy,
+#     )
+#     return _get_realtime_occupancy_impl(req, db)
 
 # not used for users
 # @router.post("/estimate-video", response_model=OccupancyVideoEstimateResponse)
