@@ -38,6 +38,12 @@ def create_reservation(
         start_time=payload.start_time,
         end_time=payload.end_time,
     )
+    service.ensure_user_has_no_overlap(
+        user_id=user_id,
+        reservation_date=payload.reservation_date,
+        start_time=payload.start_time,
+        end_time=payload.end_time,
+    )
 
     reservation = Reservation(
         user_id=user_id,
@@ -52,14 +58,24 @@ def create_reservation(
     db.add(reservation)
     db.commit()
     db.refresh(reservation)
+
+    stmt = (
+        select(Reservation)
+        .options(
+            selectinload(Reservation.facility),
+            selectinload(Reservation.user),
+        )
+        .where(Reservation.id == reservation.id)
+    )
+    reservation = db.execute(stmt).scalar_one()
     return reservation
 
 
-@router.delete("/{reservation_id}", response_model=ReservationPublic)
+@router.delete("/{reservation_id}", status_code=status.HTTP_204_NO_CONTENT)
 def cancel_reservation(
     reservation_id: uuid.UUID,
     db: Session = Depends(get_db),
-) -> ReservationPublic:
+):
     reservation = db.get(Reservation, reservation_id)
     if not reservation:
         raise HTTPException(
@@ -70,8 +86,7 @@ def cancel_reservation(
     service = ReservationService(db)
     service.cancel_reservation(reservation)
     db.commit()
-    db.refresh(reservation)
-    return reservation
+    return
 
 
 @router.get("/my", response_model=ReservationListResponse)
@@ -95,7 +110,7 @@ def list_my_reservations(
             selectinload(Reservation.user),
         )
         .where(Reservation.user_id == user_id)
-        .order_by(Reservation.reservation_date.desc(), Reservation.start_time.desc())
+        .order_by(Reservation.reservation_date.asc(), Reservation.start_time.asc()) 
     )
     items = db.execute(stmt).scalars().all()
     return ReservationListResponse(items=items, total=len(items))

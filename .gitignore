@@ -97,3 +97,7 @@ computer_vision/core/__pycache__/seat_occupancy_detector.cpython-312.pyc
 *.avi
 *.jpg
 *.png
+
+# Allow images in frontend
+!frontend/**/*.jpg
+!frontend/**/*.png

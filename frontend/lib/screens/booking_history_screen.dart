@@ -67,140 +67,162 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('My Reservations'),
-          backgroundColor: Colors.teal,
-          foregroundColor: Colors.white,
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'All'),
-              Tab(text: 'Confirmed'),
-              Tab(text: 'Cancelled'),
-            ],
-            indicatorColor: Colors.white,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
+      child: Column(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+            ),
+            child: const TabBar(
+              tabs: [
+                Tab(text: 'All'),
+                Tab(text: 'Upcoming'),
+                Tab(text: 'History'),
+              ],
+              indicatorColor: Colors.teal,
+              indicatorSize: TabBarIndicatorSize.label,
+              labelColor: Colors.teal,
+              labelStyle: TextStyle(fontWeight: FontWeight.bold),
+              unselectedLabelColor: Colors.grey,
+            ),
           ),
-        ),
-        body: FutureBuilder<List<dynamic>>(
-          future: _reservationsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            } else if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
-            } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return const Center(child: Text('No reservations found.'));
-            }
+          Expanded(
+            child: FutureBuilder<List<dynamic>>(
+              future: _reservationsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(child: Text('No reservations found.'));
+                }
 
-            final reservations = snapshot.data!;
+                final reservations = snapshot.data!;
 
-            Widget buildList(String? statusFilter) {
-              final filtered = statusFilter == null
-                  ? reservations
-                  : reservations
-                        .where((r) => r['status'] == statusFilter)
+                Widget buildList(List<String>? statusFilters) {
+                  List<dynamic> filtered;
+                  if (statusFilters == null) {
+                    final upcoming = reservations
+                        .where(
+                          (r) => ['confirmed', 'pending'].contains(r['status']),
+                        )
                         .toList();
+                    final history = reservations
+                        .where(
+                          (r) =>
+                              !['confirmed', 'pending'].contains(r['status']),
+                        )
+                        .toList();
+                    filtered = [...upcoming, ...history];
+                  } else {
+                    filtered = reservations
+                        .where((r) => statusFilters.contains(r['status']))
+                        .toList();
+                  }
 
-              if (filtered.isEmpty) {
-                return Center(
-                  child: Text(
-                    statusFilter == null
-                        ? "No reservations found."
-                        : "No $statusFilter reservations.",
-                  ),
-                );
-              }
-
-              return RefreshIndicator(
-                onRefresh: _refresh,
-                child: ListView.builder(
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final res = filtered[index];
-                    final facility = res['facility'];
-                    final date = res['reservation_date'];
-                    final start = res['start_time'];
-                    final end = res['end_time'];
-                    final status = res['status'];
-
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
+                  if (filtered.isEmpty) {
+                    return Center(
+                      child: Text(
+                        statusFilters == null
+                            ? "No reservations found."
+                            : "No reservations found in this category.",
                       ),
-                      child: Column(
-                        children: [
-                          ListTile(
-                            leading: Icon(
-                              Icons.event_note,
-                              color: status == 'confirmed'
-                                  ? Colors.teal
-                                  : Colors.grey,
-                            ),
-                            title: Text(
-                              facility['name'],
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (facility != null)
-                                  Text(
-                                    facility['library_name'],
-                                    style: const TextStyle(
-                                      color: Colors.black87,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                const SizedBox(height: 4),
-                                Text('$date | $start - $end'),
-                                Text(
-                                  'Status: $status',
-                                  style: TextStyle(
-                                    color: status == 'confirmed'
-                                        ? Colors.green
-                                        : Colors.red,
+                    );
+                  }
+
+                  return RefreshIndicator(
+                    onRefresh: _refresh,
+                    child: ListView.builder(
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final res = filtered[index];
+                        final facility = res['facility'];
+                        final date = res['reservation_date'];
+                        final start = res['start_time'];
+                        final end = res['end_time'];
+                        final status = res['status'];
+
+                        return Card(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          child: Column(
+                            children: [
+                              ListTile(
+                                leading: Icon(
+                                  Icons.event_note,
+                                  color: status == 'confirmed'
+                                      ? Colors.teal
+                                      : Colors.grey,
+                                ),
+                                title: Text(
+                                  facility['name'],
+                                  style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          if (status == 'confirmed')
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Center(
-                                child: TextButton(
-                                  onPressed: () =>
-                                      _showCancelDialog(res['id'].toString()),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.red,
-                                  ),
-                                  child: const Text('Cancel'),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (facility != null)
+                                      Text(
+                                        facility['library_name'],
+                                        style: const TextStyle(
+                                          color: Colors.black87,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    const SizedBox(height: 4),
+                                    Text('$date | $start - $end'),
+                                    Text(
+                                      'Status: $status',
+                                      style: TextStyle(
+                                        color: status == 'confirmed'
+                                            ? Colors.green
+                                            : Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              );
-            }
+                              if (status == 'confirmed')
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8.0),
+                                  child: Center(
+                                    child: TextButton(
+                                      onPressed: () => _showCancelDialog(
+                                        res['id'].toString(),
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                      ),
+                                      child: const Text('Cancel'),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                }
 
-            return TabBarView(
-              children: [
-                buildList(null),
-                buildList('confirmed'),
-                buildList('cancelled'),
-              ],
-            );
-          },
-        ),
+                return TabBarView(
+                  children: [
+                    buildList(null),
+                    buildList(['confirmed', 'pending']),
+                    buildList(['finished', 'claimed', 'unclaimed']),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

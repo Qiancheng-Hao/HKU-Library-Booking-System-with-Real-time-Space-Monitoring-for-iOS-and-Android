@@ -208,30 +208,26 @@ class ApiService {
     required String startTime,
     required String endTime,
   }) async {
-    try {
-      final headers = await _getAuthHeaders();
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/v1/reservations'),
-        headers: headers,
-        body: json.encode({
-          'facility_id': facilityId,
-          'reservation_date': date,
-          'start_time': startTime,
-          'end_time': endTime,
-          'notes': 'Mobile App Booking',
-        }),
-      );
+    final headers = await _getAuthHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/reservations'),
+      headers: headers,
+      body: json.encode({
+        'facility_id': facilityId,
+        'reservation_date': date,
+        'start_time': startTime,
+        'end_time': endTime,
+        'notes': 'Mobile App Booking',
+      }),
+    );
 
-      if (response.statusCode != 201) {
-        if (response.statusCode == 401) {
-          _handleAuthError();
-          return;
-        }
-        final error = json.decode(response.body);
-        throw Exception(error['detail'] ?? 'Failed to create reservation');
+    if (response.statusCode != 201) {
+      if (response.statusCode == 401) {
+        _handleAuthError();
+        return;
       }
-    } catch (e) {
-      throw Exception('Error creating reservation: $e');
+      final error = json.decode(response.body);
+      throw error['detail'] ?? 'Failed to create reservation';
     }
   }
 
@@ -264,7 +260,7 @@ class ApiService {
         headers: headers,
       );
 
-      if (response.statusCode != 200) {
+      if (response.statusCode != 200 && response.statusCode != 204) {
         if (response.statusCode == 401) {
           _handleAuthError();
           return;
@@ -273,6 +269,28 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Error cancelling reservation: $e');
+    }
+  }
+
+  // --- Occupancy ---
+
+  static Future<Map<String, dynamic>> getRealtimeOccupancy() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/v1/occupancy/realtime'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to load occupancy data: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Error fetching occupancy data: $e');
     }
   }
 }

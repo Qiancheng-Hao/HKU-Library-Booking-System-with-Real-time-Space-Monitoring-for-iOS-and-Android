@@ -16,7 +16,9 @@ class ReservationStatus(str, enum.Enum):
 
     pending = "pending"
     confirmed = "confirmed"
-    cancelled = "cancelled"
+    claimed = "claimed"
+    unclaimed = "unclaimed"
+    finished = "finished"
 
 
 class Reservation(Base):
@@ -64,11 +66,6 @@ class Reservation(Base):
         server_default=func.now(),
         nullable=False,
         comment="Timestamp when the reservation was created.",
-    )
-    cancelled_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        comment="Timestamp when the reservation was cancelled.",
     )
 
     facility = relationship(

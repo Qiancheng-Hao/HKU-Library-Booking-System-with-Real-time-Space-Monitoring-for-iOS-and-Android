@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+from apscheduler.schedulers.background import BackgroundScheduler
+from app.core.tasks import update_expired_reservations
 
 from app import models  # noqa: F401
 from app.models.occupancy import OccupancyLog  # Ensure model is imported for create_all
@@ -99,6 +101,11 @@ async def _run_camera_capture_loop() -> None:
 
 @app.on_event("startup")
 async def start_background_tasks() -> None:
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(update_expired_reservations, 'cron', minute='0,15,30,45')
+    scheduler.start()
+    app.state.scheduler = scheduler
+
     if settings.occupancy_realtime_enabled:
         app.state.occupancy_realtime_task = asyncio.create_task(_run_occupancy_realtime_loop())
     if settings.camera_capture_enabled:
@@ -107,6 +114,10 @@ async def start_background_tasks() -> None:
 
 @app.on_event("shutdown")
 async def stop_background_tasks() -> None:
+    scheduler = getattr(app.state, "scheduler", None)
+    if scheduler:
+        scheduler.shutdown()
+
     task = getattr(app.state, "occupancy_realtime_task", None)
     if task is not None:
         task.cancel()
