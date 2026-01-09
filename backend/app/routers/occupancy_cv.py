@@ -2,7 +2,7 @@ import math
 from datetime import datetime, time as time_type, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Body, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,8 @@ from app.models import Library
 from app.models.occupancy import AreaOccupancySnapshot
 from app.schemas.occupancy_cv import (
     LibraryOccupancyItem,
+    OccupancyRecommendationRequest,
+    OccupancyRecommendationResponse,
     OccupancyEstimateResponse,
     OccupancyVideoEstimateResponse,
     RealtimeOccupancyRequest,
@@ -88,6 +90,43 @@ def _is_open_at(*, opening_hours: str | None, at: datetime) -> bool:
     if start_t <= end_t:
         return start_t <= now_t <= end_t
     return now_t >= start_t or now_t <= end_t
+
+
+def _select_best_open_area(
+    req: OccupancyRecommendationRequest,
+    *,
+    libraries: list[Library],
+    snapshots: list[AreaOccupancySnapshot],
+    at: datetime,
+) -> tuple[float, float, Library, AreaOccupancySnapshot] | None:
+    library_by_name: dict[str, Library] = {lib.name: lib for lib in libraries}
+
+    candidates: list[tuple[float, float, Library, AreaOccupancySnapshot]] = []
+    for row in snapshots:
+        if row.occupancy_rate is None or float(row.occupancy_rate) < 0:
+            continue
+        lib = library_by_name.get(row.location)
+        if lib is None:
+            continue
+        if not _is_open_at(opening_hours=lib.opening_hours, at=at):
+            continue
+        coords = _parse_lat_lon(lib.location)
+        if coords is None:
+            continue
+        lib_lat, lib_lon = coords
+        distance_m = _haversine_m(req.latitude, req.longitude, lib_lat, lib_lon)
+        occupancy_percent = float(row.occupancy_rate) * 100.0
+        candidates.append((distance_m, occupancy_percent, lib, row))
+
+    if not candidates:
+        return None
+
+    if req.strategy == "occupancyRate":
+        candidates.sort(key=lambda x: (x[1], x[0]))
+    else:
+        candidates.sort(key=lambda x: (x[0], x[1]))
+
+    return candidates[0]
 
 
 router = APIRouter(prefix="/occupancy", tags=["Occupancy"])
@@ -235,6 +274,66 @@ def get_realtime_occupancy(
     db: Session = Depends(get_db),
 ) -> RealtimeOccupancyResponse:
     return _get_realtime_occupancy_impl(req, db)
+
+
+@router.post("/recommendation", response_model=OccupancyRecommendationResponse)
+def get_occupancy_recommendation(
+    req: OccupancyRecommendationRequest = Body(...),
+    db: Session = Depends(get_db),
+) -> OccupancyRecommendationResponse:
+    at = datetime.now(timezone.utc)
+
+    libraries = db.execute(select(Library).order_by(Library.name.asc())).scalars().all()
+
+    latest_subq = (
+        select(
+            AreaOccupancySnapshot.location.label("location"),
+            AreaOccupancySnapshot.area.label("area"),
+            func.max(AreaOccupancySnapshot.measured_at).label("measured_at"),
+        )
+        .where(AreaOccupancySnapshot.measured_at <= at)
+        .group_by(AreaOccupancySnapshot.location, AreaOccupancySnapshot.area)
+        .subquery()
+    )
+
+    snapshot_stmt = (
+        select(AreaOccupancySnapshot)
+        .join(
+            latest_subq,
+            (AreaOccupancySnapshot.location == latest_subq.c.location)
+            & (AreaOccupancySnapshot.area == latest_subq.c.area)
+            & (AreaOccupancySnapshot.measured_at == latest_subq.c.measured_at),
+        )
+        .order_by(AreaOccupancySnapshot.location.asc(), AreaOccupancySnapshot.area.asc())
+    )
+    snapshots = db.execute(snapshot_stmt).scalars().all()
+
+    selected = _select_best_open_area(req, libraries=libraries, snapshots=snapshots, at=at)
+    if selected is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No open study areas available.",
+        )
+
+    distance_m, occupancy_percent, lib, row = selected
+    last_updated = None
+    if row.measured_at is not None:
+        last_updated_dt = (
+            row.measured_at.replace(tzinfo=timezone.utc)
+            if row.measured_at.tzinfo is None
+            else row.measured_at.astimezone(timezone.utc)
+        )
+        last_updated = last_updated_dt.isoformat()
+
+    return OccupancyRecommendationResponse(
+        libraryId=str(lib.id),
+        libraryName=lib.name,
+        area=str(row.area),
+        occupancyRate=float(occupancy_percent),
+        distanceFromUser=float(distance_m / 1000.0),
+        openingHours=lib.opening_hours,
+        lastUpdated=last_updated,
+    )
 
 
 # @router.get("/occupancy", response_model=RealtimeOccupancyResponse)

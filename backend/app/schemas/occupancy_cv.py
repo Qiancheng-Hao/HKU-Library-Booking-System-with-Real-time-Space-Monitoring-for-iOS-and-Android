@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -57,3 +59,20 @@ class RealtimeOccupancyRequest(BaseModel):
     maxResults: int = 10
     time: datetime | None = None
     sortBy: str | None = None
+
+
+class OccupancyRecommendationRequest(BaseModel):
+    latitude: float
+    longitude: float
+    strategy: Literal["distance", "occupancyRate"]
+    userId: str | None = None
+
+
+class OccupancyRecommendationResponse(BaseModel):
+    libraryId: str
+    libraryName: str
+    area: str
+    occupancyRate: float
+    distanceFromUser: float
+    openingHours: str | None = None
+    lastUpdated: str | None = None
