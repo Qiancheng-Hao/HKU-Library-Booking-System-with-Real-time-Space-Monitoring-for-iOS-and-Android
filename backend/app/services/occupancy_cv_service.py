@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import logging
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -15,6 +16,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.occupancy import AreaOccupancySnapshot, CameraSource, OccupancyLog
+
+logger = logging.getLogger(__name__)
 
 
 def _repo_root() -> Path:
@@ -264,32 +267,54 @@ def run_camera_capture_cycle() -> int:
             .scalars()
             .all()
         )
+        if not cameras:
+            logger.info("camera capture: no enabled cameras found")
+            return 0
         for camera in cameras:
-            cap = cv2.VideoCapture(camera.stream_url)
+            stream_url = str(camera.stream_url or "")
+            normalized = stream_url
+            if normalized.startswith("resp:"):
+                normalized = "rtsp://" + normalized[len("resp:") :]
+            if normalized.startswith("rtsp:") and not normalized.startswith("rtsp://"):
+                normalized = "rtsp://" + normalized[len("rtsp:") :]
+            logger.info("camera capture: start camera=%s url=%s", camera.name, normalized)
+            cap = cv2.VideoCapture(normalized)
             try:
+                if not cap.isOpened():
+                    logger.warning(
+                        "camera capture: open failed camera=%s url=%s", camera.name, normalized
+                    )
+                    continue
                 ok, frame = cap.read()
             finally:
                 cap.release()
             if not ok or frame is None:
+                logger.warning(
+                    "camera capture: read failed camera=%s url=%s", camera.name, normalized
+                )
                 continue
 
-            stats = estimate_occupancy_from_frame(
-                frame=frame,
-                location=camera.location,
-                area=camera.area,
-            )
-            save_occupancy_log(
-                db,
-                location=camera.location,
-                area=camera.area,
-                stats=stats,
-                source=camera.name,
-                frame_index=None,
-            )
-            camera.last_captured_at = now
-            db.add(camera)
-            db.commit()
-            captured += 1
+            try:
+                stats = estimate_occupancy_from_frame(
+                    frame=frame,
+                    location=camera.location,
+                    area=camera.area,
+                )
+                save_occupancy_log(
+                    db,
+                    location=camera.location,
+                    area=camera.area,
+                    stats=stats,
+                    source=camera.name,
+                    frame_index=None,
+                )
+                camera.last_captured_at = now
+                db.add(camera)
+                db.commit()
+                captured += 1
+            except Exception:
+                db.rollback()
+                logger.exception("camera capture: inference/save failed camera=%s", camera.name)
     return captured
 
 

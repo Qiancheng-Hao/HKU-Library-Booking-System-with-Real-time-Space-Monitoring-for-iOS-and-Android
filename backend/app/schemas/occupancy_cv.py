@@ -36,6 +36,7 @@ class OccupancyVideoEstimateResponse(BaseModel):
 class LibraryOccupancyItem(BaseModel):
     libraryId: str
     libraryName: str
+    area: str | None = None
     occupancyRate: float
     distanceFromUser: float
     isOpen: bool

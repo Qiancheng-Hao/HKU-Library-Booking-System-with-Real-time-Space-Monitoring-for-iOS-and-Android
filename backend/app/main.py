@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +27,8 @@ app = FastAPI(
     version=settings.api_version,
     debug=settings.debug,
 )
+
+logger = logging.getLogger(__name__)
 
 class TokenAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -81,7 +84,7 @@ async def _run_occupancy_realtime_loop() -> None:
         try:
             compute_and_store_area_snapshots(window_seconds=window_seconds)
         except Exception:
-            pass
+            logger.exception("occupancy realtime loop failed")
         await asyncio.sleep(refresh_seconds)
 
 # camera to log
@@ -89,9 +92,10 @@ async def _run_camera_capture_loop() -> None:
     interval_seconds = max(1, int(settings.camera_capture_interval_seconds))
     while True:
         try:
-            await asyncio.to_thread(run_camera_capture_cycle)
+            captured = await asyncio.to_thread(run_camera_capture_cycle)
+            logger.info("camera capture cycle finished: captured=%s", captured)
         except Exception:
-            pass
+            logger.exception("camera capture loop failed")
         await asyncio.sleep(interval_seconds)
 
 

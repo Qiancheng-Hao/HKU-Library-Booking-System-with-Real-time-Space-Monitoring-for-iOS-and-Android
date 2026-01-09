@@ -186,43 +186,37 @@ def _get_realtime_occupancy_impl(
             continue
 
         area_rows = by_location.get(lib.name, [])
-        valid = [r for r in area_rows if r.occupancy_rate is not None and float(r.occupancy_rate) >= 0]
-        if valid:
-            total_weight = sum(int(r.sample_count or 0) for r in valid)
-            if total_weight > 0:
-                rate_0_1 = sum(float(r.occupancy_rate) * int(r.sample_count or 0) for r in valid) / total_weight
-            else:
-                rate_0_1 = sum(float(r.occupancy_rate) for r in valid) / len(valid)
-            last_updated_dt = max(
-                (
+        valid = [
+            r
+            for r in area_rows
+            if r.area is not None and str(r.area).strip() and r.occupancy_rate is not None and float(r.occupancy_rate) >= 0
+        ]
+        for r in valid:
+            occupancy_percent = float(r.occupancy_rate) * 100.0
+            if req.capacityThreshold is not None and occupancy_percent >= float(req.capacityThreshold):
+                continue
+
+            last_updated = None
+            if r.measured_at is not None:
+                last_updated_dt = (
                     r.measured_at.replace(tzinfo=timezone.utc)
                     if r.measured_at.tzinfo is None
                     else r.measured_at.astimezone(timezone.utc)
                 )
-                for r in valid
-            )
-            last_updated = last_updated_dt.isoformat()
-        else:
-            rate_0_1 = -1.0
-            last_updated = None
+                last_updated = last_updated_dt.isoformat()
 
-        occupancy_percent = rate_0_1 * 100.0 if rate_0_1 >= 0 else -1.0
-        if req.capacityThreshold is not None and occupancy_percent >= 0 and occupancy_percent >= float(req.capacityThreshold):
-            continue
-        if req.capacityThreshold is not None and occupancy_percent < 0:
-            continue
-
-        results.append(
-            LibraryOccupancyItem(
-                libraryId=str(lib.id),
-                libraryName=lib.name,
-                occupancyRate=float(occupancy_percent),
-                distanceFromUser=float(distance_m),
-                isOpen=bool(is_open),
-                openingHours=lib.opening_hours,
-                lastUpdated=last_updated,
+            results.append(
+                LibraryOccupancyItem(
+                    libraryId=str(lib.id),
+                    libraryName=lib.name,
+                    area=str(r.area),
+                    occupancyRate=float(occupancy_percent),
+                    distanceFromUser=float(distance_m),
+                    isOpen=bool(is_open),
+                    openingHours=lib.opening_hours,
+                    lastUpdated=last_updated,
+                )
             )
-        )
 
     if req.sortBy == "occupancyRate":
         results.sort(key=lambda x: (x.occupancyRate < 0, x.occupancyRate))
