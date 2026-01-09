@@ -253,7 +253,7 @@ def compute_and_store_area_snapshots(*, window_seconds: int) -> int:
         return len(aggregates)
 
 
-def run_camera_capture_cycle(*, default_interval_seconds: int) -> int:
+def run_camera_capture_cycle() -> int:
     import cv2
 
     now = datetime.now(timezone.utc)
@@ -265,15 +265,6 @@ def run_camera_capture_cycle(*, default_interval_seconds: int) -> int:
             .all()
         )
         for camera in cameras:
-            interval = int(camera.capture_interval_seconds or default_interval_seconds or 1)
-            last = camera.last_captured_at
-            due = last is None
-            if last is not None:
-                last_aware = last.replace(tzinfo=timezone.utc) if last.tzinfo is None else last.astimezone(timezone.utc)
-                due = (now - last_aware).total_seconds() >= interval
-            if not due:
-                continue
-
             cap = cv2.VideoCapture(camera.stream_url)
             try:
                 ok, frame = cap.read()
@@ -282,7 +273,11 @@ def run_camera_capture_cycle(*, default_interval_seconds: int) -> int:
             if not ok or frame is None:
                 continue
 
-            stats = estimate_occupancy_from_frame(frame=frame, location=camera.location, area=camera.area)
+            stats = estimate_occupancy_from_frame(
+                frame=frame,
+                location=camera.location,
+                area=camera.area,
+            )
             save_occupancy_log(
                 db,
                 location=camera.location,

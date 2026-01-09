@@ -86,17 +86,13 @@ async def _run_occupancy_realtime_loop() -> None:
 
 # camera to log
 async def _run_camera_capture_loop() -> None:
-    poll_seconds = max(1, int(settings.camera_capture_poll_seconds))
-    default_interval_seconds = max(1, int(settings.camera_capture_interval_seconds))
+    interval_seconds = max(1, int(settings.camera_capture_interval_seconds))
     while True:
         try:
-            await asyncio.to_thread(
-                run_camera_capture_cycle,
-                default_interval_seconds=default_interval_seconds,
-            )
+            await asyncio.to_thread(run_camera_capture_cycle)
         except Exception:
             pass
-        await asyncio.sleep(poll_seconds)
+        await asyncio.sleep(interval_seconds)
 
 
 @app.on_event("startup")

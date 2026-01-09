@@ -259,12 +259,6 @@ class CameraSource(Base):
         index=True,
         comment="Whether this camera is enabled for ingestion.",
     )
-    capture_interval_seconds: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=5,
-        comment="Capture interval seconds for this camera.",
-    )
     last_captured_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

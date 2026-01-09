@@ -49,9 +49,8 @@ class Settings(BaseSettings):
     camera_capture_interval_seconds: int = Field(
         default=3, alias="CAMERA_CAPTURE_INTERVAL_SECONDS"
     )
-    camera_capture_poll_seconds: int = Field(
-        default=1, alias="CAMERA_CAPTURE_POLL_SECONDS"
-    )
+    
+    # Authentication settings
     secret_key: str = Field(
         default="09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7",
         alias="SECRET_KEY",
