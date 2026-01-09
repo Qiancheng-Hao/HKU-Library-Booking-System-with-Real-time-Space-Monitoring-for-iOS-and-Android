@@ -13,7 +13,8 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
-
+    
+    # Application settings
     app_name: str = Field(default="HKU Library Booking API", alias="APP_NAME")
     api_version: str = Field(default="v1", alias="API_VERSION")
     debug: bool = Field(default=False, alias="API_DEBUG")
@@ -22,6 +23,8 @@ class Settings(BaseSettings):
         alias="DATABASE_URL",
     )
     default_timezone: str = Field(default="Asia/Hong_Kong", alias="DEFAULT_TIMEZONE")
+    
+    # Reservation settings
     reservation_lead_days: int = Field(
         default=14,
         description="Maximum number of days ahead a user can make a reservation.",
@@ -30,10 +33,8 @@ class Settings(BaseSettings):
         default=5,
         description="Buffer minutes between reservation slots to avoid overlaps.",
     )
-    occupancy_refresh_minutes: Literal[5, 10, 15] = Field(
-        default=5,
-        description="Expected refresh cadence (minutes) for occupancy snapshots.",
-    )
+    
+    # Log → occupancy_area_snapshots settings
     occupancy_realtime_enabled: bool = Field(
         default=True, alias="OCCUPANCY_REALTIME_ENABLED"
     )
@@ -42,7 +43,13 @@ class Settings(BaseSettings):
     )
     occupancy_realtime_window_seconds: int = Field(
         default=10, alias="OCCUPANCY_REALTIME_WINDOW_SECONDS"
-    )
+    )    
+    # occupancy_refresh_minutes: Literal[5, 10, 15] = Field(
+    #     default=5,
+    #     description="Expected refresh cadence (minutes) for occupancy snapshots.",
+    # )
+    
+    # Stream → log settings
     camera_capture_enabled: bool = Field(
         default=False, alias="CAMERA_CAPTURE_ENABLED"
     )
@@ -59,15 +66,8 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(
         default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES"
     )
-    # cv_model_paths are determined by service
-    # cv_occupancy_model_path: str | None = Field(
-    #     default=None,
-    #     alias="CV_OCCUPANCY_MODEL_PATH",
-    # )
-    # cv_seat_model_path: str | None = Field(
-    #     default=None,
-    #     alias="CV_SEAT_MODEL_PATH",
-    # )
+    
+    # Computer Vision settings
     cv_device: str = Field(default="auto", alias="CV_DEVICE")
     cv_confidence_threshold: float = Field(default=0.5, alias="CV_CONFIDENCE_THRESHOLD")
     cv_proximity_threshold: float = Field(default=100.0, alias="CV_PROXIMITY_THRESHOLD")
@@ -79,7 +79,15 @@ class Settings(BaseSettings):
     )
     cv_imgsz: int = Field(default=640, alias="CV_IMAGE_SIZE")
     cv_seat_imgsz: int = Field(default=640, alias="CV_SEAT_IMAGE_SIZE")
-
+    # cv_model_paths are determined by service
+    # cv_occupancy_model_path: str | None = Field(
+    #     default=None,
+    #     alias="CV_OCCUPANCY_MODEL_PATH",
+    # )
+    # cv_seat_model_path: str | None = Field(
+    #     default=None,
+    #     alias="CV_SEAT_MODEL_PATH",
+    # )
 
 
 @lru_cache
