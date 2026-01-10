@@ -9,6 +9,7 @@ class LibraryBase(BaseModel):
     id: int
     name: str
     location: str | None = None
+    campus: str | None = None
     description: str | None = None
 
 class LibraryWithFacilities(LibraryBase):
@@ -19,6 +20,7 @@ class LibrarySummary(BaseModel):
     id: int
     name: str
     location: str | None = None
+    campus: str | None = None
     facility_count: int
 
 

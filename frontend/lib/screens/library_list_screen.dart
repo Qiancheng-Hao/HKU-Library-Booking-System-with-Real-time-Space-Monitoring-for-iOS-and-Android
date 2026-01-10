@@ -45,10 +45,7 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
           ),
           Expanded(
             child: TabBarView(
-              children: [
-                _buildLibraryList(),
-                const BookingHistoryScreen(),
-              ],
+              children: [_buildLibraryList(), const BookingHistoryScreen()],
             ),
           ),
         ],
@@ -174,7 +171,7 @@ class _LibraryListItemState extends State<LibraryListItem> {
               widget.library['name'] ?? 'Unknown Library',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            subtitle: Text(widget.library['location'] ?? 'No location info'),
+            subtitle: Text(widget.library['campus'] ?? 'HKU Campus'),
             trailing: Icon(
               _isExpanded ? Icons.expand_less : Icons.expand_more,
               color: _isExpanded ? Colors.teal : Colors.grey,

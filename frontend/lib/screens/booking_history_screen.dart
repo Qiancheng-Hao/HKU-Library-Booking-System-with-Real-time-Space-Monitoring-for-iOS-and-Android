@@ -95,13 +95,14 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                   return const Center(child: CircularProgressIndicator());
                 } else if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
-                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text('No reservations found.'));
                 }
 
-                final reservations = snapshot.data!;
+                final reservations = snapshot.data ?? [];
 
-                Widget buildList(List<String>? statusFilters) {
+                Widget buildList(
+                  List<String>? statusFilters,
+                  String emptyMessage,
+                ) {
                   List<dynamic> filtered;
                   if (statusFilters == null) {
                     final upcoming = reservations
@@ -123,13 +124,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                   }
 
                   if (filtered.isEmpty) {
-                    return Center(
-                      child: Text(
-                        statusFilters == null
-                            ? "No reservations found."
-                            : "No reservations found in this category.",
-                      ),
-                    );
+                    return Center(child: Text(emptyMessage));
                   }
 
                   return RefreshIndicator(
@@ -214,9 +209,16 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
 
                 return TabBarView(
                   children: [
-                    buildList(null),
-                    buildList(['confirmed', 'pending']),
-                    buildList(['finished', 'claimed', 'unclaimed']),
+                    buildList(null, "No reservations found."),
+                    buildList([
+                      'confirmed',
+                      'pending',
+                    ], "No upcoming reservations."),
+                    buildList([
+                      'finished',
+                      'claimed',
+                      'unclaimed',
+                    ], "No past reservations."),
                   ],
                 );
               },

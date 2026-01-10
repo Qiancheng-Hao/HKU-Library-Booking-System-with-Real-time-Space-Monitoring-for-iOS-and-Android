@@ -20,6 +20,7 @@ def list_libraries(db: Session = Depends(get_db)) -> LibraryListResponse:
             Library.id,
             Library.name,
             Library.location,
+            Library.campus,
             func.count(Facility.id).label("facility_count"),
         )
         .outerjoin(Facility, Library.id == Facility.library_id)
@@ -33,6 +34,7 @@ def list_libraries(db: Session = Depends(get_db)) -> LibraryListResponse:
             id=row.id,
             name=row.name,
             location=row.location,
+            campus=row.campus,
             facility_count=row.facility_count,
         )
         for row in rows

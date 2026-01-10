@@ -15,7 +15,12 @@ class ApiService {
   static String get baseUrl {
     if (kIsWeb) return 'http://localhost:8000';
     if (Platform.isAndroid) return 'http://10.0.2.2:8000';
-    return 'http://127.0.0.1:8000';
+    // return 'http://127.0.0.1:8000';
+    // For physical iOS device, use your Mac's local IP
+    // return 'http://172.20.10.4:8000';
+    return 'http://192.168.0.202:8000';
+    // ipconfig getifaddr en0
+    // uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
   }
 
   // --- Auth ---
@@ -274,16 +279,32 @@ class ApiService {
 
   // --- Occupancy ---
 
-  static Future<Map<String, dynamic>> getRealtimeOccupancy() async {
+  static Future<Map<String, dynamic>> getRealtimeOccupancy({
+    double? latitude,
+    double? longitude,
+  }) async {
     try {
       final headers = await _getAuthHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/v1/occupancy/realtime'),
+      // Default to HKU coordinates if not provided
+      final double lat = latitude ?? 22.2830;
+      final double lon = longitude ?? 114.1371;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/v1/occupancy/occupancy'),
         headers: headers,
+        body: json.encode({
+          'latitude': lat,
+          'longitude': lon,
+          'radius': 50000000,
+          'maxResults': 20,
+        }),
       );
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
+      } else if (response.statusCode == 401) {
+        _handleAuthError();
+        return {};
       } else {
         throw Exception(
           'Failed to load occupancy data: ${response.statusCode}',
@@ -291,6 +312,44 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Error fetching occupancy data: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getOccupancyRecommendation({
+    double? latitude,
+    double? longitude,
+    String strategy = 'distance', // 'distance' or 'occupancyRate'
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      // Default to HKU coordinates if not provided
+      final double lat = latitude ?? 22.2830;
+      final double lon = longitude ?? 114.1371;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/v1/occupancy/recommendation'),
+        headers: headers,
+        body: json.encode({
+          'latitude': lat,
+          'longitude': lon,
+          'strategy': strategy,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else if (response.statusCode == 401) {
+        _handleAuthError();
+        return {};
+      } else if (response.statusCode == 404) {
+        return {};
+      } else {
+        throw Exception(
+          'Failed to load recommendation: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Error fetching recommendation: $e');
     }
   }
 }

@@ -330,7 +330,7 @@ def get_occupancy_recommendation(
         libraryName=lib.name,
         area=str(row.area),
         occupancyRate=float(occupancy_percent),
-        distanceFromUser=float(distance_m / 1000.0),
+        distanceFromUser=float(distance_m),
         openingHours=lib.opening_hours,
         lastUpdated=last_updated,
     )

@@ -15,12 +15,23 @@ class _HomeScreenState extends State<HomeScreen> {
   String _locationMessage = "Fetching location...";
   Position? _currentPosition;
   late Future<Map<String, dynamic>> _occupancyFuture;
+  late Future<Map<String, dynamic>> _recommendationFuture;
+  String _recommendationStrategy = 'occupancyRate'; // Default: Quietest
 
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
     _occupancyFuture = ApiService.getRealtimeOccupancy();
+    _recommendationFuture = _fetchRecommendation();
+  }
+
+  Future<Map<String, dynamic>> _fetchRecommendation() {
+    return ApiService.getOccupancyRecommendation(
+      latitude: _currentPosition?.latitude,
+      longitude: _currentPosition?.longitude,
+      strategy: _recommendationStrategy,
+    );
   }
 
   Future<void> _getCurrentLocation() async {
@@ -65,6 +76,11 @@ class _HomeScreenState extends State<HomeScreen> {
         _currentPosition = position;
         _locationMessage =
             "Lat: ${position.latitude}, Long: ${position.longitude}";
+        _occupancyFuture = ApiService.getRealtimeOccupancy(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+        _recommendationFuture = _fetchRecommendation();
       });
     } catch (e) {
       setState(() {
@@ -86,9 +102,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refreshOccupancy() async {
     setState(() {
-      _occupancyFuture = ApiService.getRealtimeOccupancy();
+      _occupancyFuture = ApiService.getRealtimeOccupancy(
+        latitude: _currentPosition?.latitude,
+        longitude: _currentPosition?.longitude,
+      );
+      _recommendationFuture = _fetchRecommendation();
     });
-    await _occupancyFuture;
+
+    await Future.wait([_occupancyFuture, _recommendationFuture]);
+  }
+
+  void _changeStrategy(String newStrategy) {
+    if (_recommendationStrategy != newStrategy) {
+      setState(() {
+        _recommendationStrategy = newStrategy;
+        _recommendationFuture = _fetchRecommendation();
+      });
+    }
   }
 
   @override
@@ -124,53 +154,142 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.teal.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.teal.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.location_on,
-                          color: Colors.teal,
-                          size: 30,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "Current Location",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.teal,
-                                ),
+
+                  // Best Spot Card
+                  FutureBuilder<Map<String, dynamic>>(
+                    future: _recommendationFuture,
+                    builder: (context, snapshot) {
+                      Widget content;
+
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        content = const Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      } else if (snapshot.hasError ||
+                          !snapshot.hasData ||
+                          snapshot.data!.isEmpty) {
+                        content = Row(
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              size: 40,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    "No Recommendation",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  Text(
+                                    "Check open hours or try again later.",
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _currentPosition != null
-                                    ? "Lat: ${_currentPosition!.latitude.toStringAsFixed(4)}\nLng: ${_currentPosition!.longitude.toStringAsFixed(4)}"
-                                    : _locationMessage,
-                                style: TextStyle(
-                                  color: Colors.grey[700],
-                                  fontSize: 13,
-                                ),
+                            ),
+                          ],
+                        );
+                      } else {
+                        final data = snapshot.data!;
+                        String libraryName = data['libraryName'].toString();
+                        if (libraryName == 'Chi Wah Learning Commons') {
+                          libraryName = 'Chi Wah Learning\nCommons';
+                        }
+                        final area = data['area'];
+                        final occupancyRate = (data['occupancyRate'] as num)
+                            .toDouble();
+                        final percentage = occupancyRate.toStringAsFixed(1);
+                        final distance = (data['distanceFromUser'] as num)
+                            .toDouble();
+
+                        content = Row(
+                          children: [
+                            const Icon(
+                              Icons.recommend,
+                              color: Colors.teal,
+                              size: 40,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Best Study Spot (${_recommendationStrategy == 'occupancyRate' ? 'Quietest' : 'Closest'})",
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.teal,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "$libraryName\n$area",
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "$percentage% Occupied • ${distance.toStringAsFixed(0)}m away",
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Stack(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.teal.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: content,
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.refresh, color: Colors.teal),
-                          onPressed: _getCurrentLocation,
-                        ),
-                      ],
-                    ),
+                          Positioned(
+                            top: 0,
+                            right: 0,
+                            child: PopupMenuButton<String>(
+                              icon: const Icon(Icons.tune, color: Colors.teal),
+                              onSelected: _changeStrategy,
+                              itemBuilder: (BuildContext context) =>
+                                  <PopupMenuEntry<String>>[
+                                    const PopupMenuItem<String>(
+                                      value: 'occupancyRate',
+                                      child: Text('Prioritize Quietest'),
+                                    ),
+                                    const PopupMenuItem<String>(
+                                      value: 'distance',
+                                      child: Text('Prioritize Closest'),
+                                    ),
+                                  ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 30),
                   Row(
@@ -208,7 +327,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           );
                         } else if (!snapshot.hasData ||
-                            (snapshot.data!['items'] as List).isEmpty) {
+                            (snapshot.data!['libraries'] as List).isEmpty) {
                           return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -228,19 +347,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           );
                         }
 
-                        final items = snapshot.data!['items'] as List;
+                        final items = snapshot.data!['libraries'] as List;
 
                         return ListView.builder(
                           itemCount: items.length,
                           itemBuilder: (context, index) {
                             final item = items[index];
-                            final occupancyRate =
-                                (item['occupancy_rate'] as num).toDouble();
-                            final percentage =
-                                (occupancyRate * 100).toStringAsFixed(1);
-                            final isCrowded = occupancyRate > 0.7;
+                            final occupancyRate = (item['occupancyRate'] as num)
+                                .toDouble();
+                            final percentage = occupancyRate.toStringAsFixed(1);
+                            final isCrowded = occupancyRate > 70;
                             final isModerate =
-                                occupancyRate > 0.3 && occupancyRate <= 0.7;
+                                occupancyRate > 30 && occupancyRate <= 70;
 
                             Color statusColor;
                             String statusText;
@@ -254,6 +372,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             } else {
                               statusColor = Colors.green;
                               statusText = "Quiet";
+                            }
+
+                            String libraryName =
+                                (item['libraryName'] ?? 'Unknown').toString();
+                            if (libraryName == 'Chi Wah Learning Commons') {
+                              libraryName = 'Chi Wah Learning\nCommons';
                             }
 
                             return Card(
@@ -281,10 +405,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            item['location'] ?? 'Unknown',
+                                            libraryName,
                                             style: const TextStyle(
                                               fontSize: 16,
-                                              fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                           Text(

@@ -24,6 +24,9 @@ class Library(Base):
     location: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="Physical address or campus location."
     )
+    campus: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="Broad campus classification (e.g., Centennial Campus)."
+    )
     description: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="Long-form description of facilities or services."
     )

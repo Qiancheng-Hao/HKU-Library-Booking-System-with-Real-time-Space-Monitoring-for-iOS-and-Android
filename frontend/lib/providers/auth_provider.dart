@@ -3,9 +3,11 @@ import '../services/api_service.dart';
 
 class AuthProvider with ChangeNotifier {
   bool _isLoggedIn = false;
+  bool _isLoading = true;
   String? _userName;
 
   bool get isLoggedIn => _isLoggedIn;
+  bool get isLoading => _isLoading;
   String? get userName => _userName;
 
   AuthProvider() {
@@ -20,6 +22,7 @@ class AuthProvider with ChangeNotifier {
     } else {
       _isLoggedIn = false;
     }
+    _isLoading = false;
     notifyListeners();
   }
 
