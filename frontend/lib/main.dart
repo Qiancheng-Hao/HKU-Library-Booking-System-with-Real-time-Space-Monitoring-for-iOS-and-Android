@@ -4,6 +4,7 @@ import 'screens/home_screen.dart';
 import 'screens/library_list_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/ai_agent_screen.dart';
 import 'providers/auth_provider.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -103,6 +104,8 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       body: currentIndex == 0
           ? const HomeScreen()
+          : currentIndex == 1
+          ? const AiAgentScreen()
           : currentIndex == 2
           ? const LibraryListScreen()
           : currentIndex == 3

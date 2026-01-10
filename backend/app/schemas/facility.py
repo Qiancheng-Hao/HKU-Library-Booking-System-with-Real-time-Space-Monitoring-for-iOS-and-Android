@@ -25,6 +25,7 @@ class FacilitySummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    library_id: int
     name: str
     type: str
     capacity: int

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../widgets/library_map_viewer.dart';
 import 'booking_screen.dart';
 import 'booking_history_screen.dart';
 
@@ -278,317 +279,68 @@ class _LibraryListItemState extends State<LibraryListItem> {
     List<dynamic> items,
     dynamic library,
   ) {
-    const double aspectRatio = 1.0;
-
-    // Extract unique floors and sort them
-    final Set<int> floors = {};
-    for (var item in items) {
-      floors.add(item['floor'] as int? ?? 1);
-    }
-    final sortedFloors = floors.toList()..sort();
-
-    // Default to the first floor (usually 1 or the lowest number)
-    int selectedFloor = sortedFloors.isNotEmpty ? sortedFloors.first : 1;
-
     showDialog(
       context: context,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            // Filter items by selected floor
-            final displayedItems = items.where((item) {
-              final itemFloor = item['floor'] as int? ?? 1;
-              return itemFloor == selectedFloor;
-            }).toList();
-
-            return Dialog(
-              insetPadding: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          "Select $type",
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1),
-
-                  // Floor Selection (only if multiple floors exist)
-                  if (sortedFloors.length > 1)
-                    Container(
-                      height: 50,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: sortedFloors.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(width: 8),
-                        itemBuilder: (context, index) {
-                          final floor = sortedFloors[index];
-                          final isSelected = floor == selectedFloor;
-                          return ChoiceChip(
-                            label: Text("Floor $floor"),
-                            selected: isSelected,
-                            onSelected: (selected) {
-                              if (selected) {
-                                setState(() => selectedFloor = floor);
-                              }
-                            },
-                            selectedColor: Colors.teal[100],
-                            labelStyle: TextStyle(
-                              color: isSelected
-                                  ? Colors.teal[900]
-                                  : Colors.black,
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          );
-                        },
+        return Dialog(
+          insetPadding: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Select $type",
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
 
-                  // Map Area
-                  AspectRatio(
-                    aspectRatio: aspectRatio,
-                    child: Container(
-                      color: Colors.grey[200],
-                      child: ClipRect(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            // Calculate the boundaries of the map based on facilities
-                            double mapBaseWidth = 100.0;
-                            double mapBaseHeight = 100.0;
-
-                            for (var item in displayedItems) {
-                              final x = (item['x_coordinate'] ?? 0) as int;
-                              final y = (item['y_coordinate'] ?? 0) as int;
-                              final w = (item['width'] ?? 0) as int;
-                              final h = (item['height'] ?? 0) as int;
-
-                              // Update bounds if this item goes outside current bounds
-                              if (x + w > mapBaseWidth) {
-                                mapBaseWidth = (x + w).toDouble();
-                              }
-                              if (y + h > mapBaseHeight) {
-                                mapBaseHeight = (y + h).toDouble();
-                              }
-                            }
-
-                            // Add a small padding (e.g. 5%) to the bounds so items aren't glued to the edge
-                            mapBaseWidth *= 1.05;
-                            mapBaseHeight *= 1.05;
-
-                            return InteractiveViewer(
-                              minScale: 1.0,
-                              maxScale: 4.0,
-                              boundaryMargin: EdgeInsets.zero,
-                              constrained: true,
-                              child: SizedBox(
-                                width: constraints.maxWidth,
-                                height: constraints.maxHeight,
-                                child: Stack(
-                                  children: [
-                                    // Placeholder Floor Plan
-                                    Positioned.fill(
-                                      child: CustomPaint(
-                                        painter: GridPainter(),
-                                        child: Container(
-                                          color: Colors.white,
-                                          child: Center(
-                                            child: Icon(
-                                              Icons.map_outlined,
-                                              size: 100,
-                                              color: Colors.teal.withValues(
-                                                alpha: 0.05,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    // Facility Markers
-                                    ...displayedItems.map((item) {
-                                      final x =
-                                          (item['x_coordinate'] ?? 50) as int;
-                                      final y =
-                                          (item['y_coordinate'] ?? 50) as int;
-
-                                      final wPercent =
-                                          (item['width'] ?? 0) as int;
-                                      final hPercent =
-                                          (item['height'] ?? 0) as int;
-
-                                      // Scale coordinates to fit the calculated bounds
-                                      final left =
-                                          (x / mapBaseWidth) *
-                                          constraints.maxWidth;
-                                      final top =
-                                          (y / mapBaseHeight) *
-                                          constraints.maxHeight;
-
-                                      // Scale dimensions similarly
-                                      final double? pixelWidth = wPercent > 0
-                                          ? (wPercent / mapBaseWidth) *
-                                                constraints.maxWidth
-                                          : null;
-                                      final double? pixelHeight = hPercent > 0
-                                          ? (hPercent / mapBaseHeight) *
-                                                constraints.maxHeight
-                                          : null;
-
-                                      return Positioned(
-                                        left: left,
-                                        top: top,
-                                        child: GestureDetector(
-                                          onTap: () {
-                                            Navigator.pop(context);
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) =>
-                                                    BookingScreen(
-                                                      facilityId: item['id'],
-                                                      facilityName:
-                                                          item['name'],
-                                                    ),
-                                              ),
-                                            );
-                                          },
-                                          child: _buildFacilityMarker(
-                                            item,
-                                            pixelWidth,
-                                            pixelHeight,
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
+              SizedBox(
+                height: 400,
+                child: LibraryMapViewer(
+                  facilities: items,
+                  onFacilityTap: (item) {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => BookingScreen(
+                          facilityId: item['id'],
+                          facilityName: item['name'],
                         ),
                       ),
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text(
-                      "Tap a facility to book.",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                ],
+                    );
+                  },
+                ),
               ),
-            );
-          },
+
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  "Tap a facility to book.",
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ],
+          ),
         );
       },
-    );
-  }
-
-  Widget _buildFacilityMarker(
-    dynamic item,
-    double? pixelWidth,
-    double? pixelHeight,
-  ) {
-    final type = (item['type'] as String? ?? '').toLowerCase();
-    final name = item['name'] as String? ?? '';
-
-    String identifier = name;
-    final nameParts = name.split(' ');
-    if (nameParts.length > 1) {
-      identifier = nameParts.last;
-    }
-
-    // Default sizes based on type
-    double defaultWidth = 30;
-    double defaultHeight = 30;
-    Color color = Colors.teal.withValues(alpha: 0.3);
-    Color borderColor = Colors.teal;
-    IconData? icon;
-
-    if (type.contains('room')) {
-      defaultWidth = 60;
-      defaultHeight = 40;
-      color = Colors.orange.withValues(alpha: 0.2);
-      borderColor = Colors.orange;
-      icon = Icons.groups;
-    } else if (type.contains('desk') || type.contains('table')) {
-      defaultWidth = 40;
-      defaultHeight = 25;
-      color = Colors.blue.withValues(alpha: 0.2);
-      borderColor = Colors.blue;
-      icon = Icons.table_restaurant;
-    } else if (type.contains('booth')) {
-      defaultWidth = 35;
-      defaultHeight = 35;
-      color = Colors.purple.withValues(alpha: 0.2);
-      borderColor = Colors.purple;
-      icon = Icons.chair;
-    }
-
-    // Use passed pixel dimensions if available, otherwise use defaults
-    final double width = pixelWidth ?? defaultWidth;
-    final double height = pixelHeight ?? defaultHeight;
-
-    // Calculate icon size to fit within the smallest dimension of the box
-    final double iconSize = (width < height ? width : height) - 4;
-
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: color,
-        border: Border.all(color: borderColor, width: 2),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (icon != null)
-            Opacity(
-              opacity: 0.2,
-              child: Icon(
-                icon,
-                size: iconSize > 0 ? iconSize : 0,
-                color: borderColor,
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2.0),
-            child: Text(
-              identifier,
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -605,26 +357,4 @@ class _LibraryListItemState extends State<LibraryListItem> {
         return Icons.chair;
     }
   }
-}
-
-class GridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.teal.withValues(alpha: 0.1)
-      ..strokeWidth = 1;
-
-    const double gridSize = 40;
-
-    for (double x = 0; x < size.width; x += gridSize) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-
-    for (double y = 0; y < size.height; y += gridSize) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
