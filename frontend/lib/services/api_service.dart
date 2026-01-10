@@ -15,12 +15,7 @@ class ApiService {
   static String get baseUrl {
     if (kIsWeb) return 'http://localhost:8000';
     if (Platform.isAndroid) return 'http://10.0.2.2:8000';
-    // return 'http://127.0.0.1:8000';
-    // For physical iOS device, use your Mac's local IP
-    // return 'http://172.20.10.4:8000';
-    return 'http://192.168.0.202:8000';
-    // ipconfig getifaddr en0
-    // uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    return 'http://127.0.0.1:8000';
   }
 
   // --- Auth ---
