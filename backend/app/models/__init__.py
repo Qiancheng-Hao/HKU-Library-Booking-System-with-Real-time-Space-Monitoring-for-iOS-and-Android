@@ -5,8 +5,8 @@ from .library import Library
 from .occupancy import (
     AreaOccupancySnapshot,
     CameraSource,
-    LibraryOccupancySnapshot,
-    LibraryOccupancyStatistic,
+    # LibraryOccupancySnapshot,
+    # LibraryOccupancyStatistic,
     OccupancyLog,
     OccupancyPeriod,
 )
@@ -18,8 +18,8 @@ __all__ = [
     "CameraSource",
     "Facility",
     "Library",
-    "LibraryOccupancySnapshot",
-    "LibraryOccupancyStatistic",
+    # "LibraryOccupancySnapshot",
+    # "LibraryOccupancyStatistic",
     "OccupancyLog",
     "OccupancyPeriod",
     "Reservation",

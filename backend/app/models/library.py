@@ -43,18 +43,18 @@ class Library(Base):
         lazy="selectin",
         primaryjoin="Library.id == foreign(Facility.library_id)",
     )
-    occupancy_snapshots = relationship(
-        "LibraryOccupancySnapshot",
-        back_populates="library",
-        cascade="all, delete-orphan",
-        lazy="noload",
-        primaryjoin="Library.id == foreign(LibraryOccupancySnapshot.library_id)",
-    )
-    occupancy_stats = relationship(
-        "LibraryOccupancyStatistic",
-        back_populates="library",
-        cascade="all, delete-orphan",
-        lazy="noload",
-        primaryjoin="Library.id == foreign(LibraryOccupancyStatistic.library_id)",
-    )
+    # occupancy_snapshots = relationship(
+    #     "LibraryOccupancySnapshot",
+    #     back_populates="library",
+    #     cascade="all, delete-orphan",
+    #     lazy="noload",
+    #     primaryjoin="Library.id == foreign(LibraryOccupancySnapshot.library_id)",
+    # )
+    # occupancy_stats = relationship(
+    #     "LibraryOccupancyStatistic",
+    #     back_populates="library",
+    #     cascade="all, delete-orphan",
+    #     lazy="noload",
+    #     primaryjoin="Library.id == foreign(LibraryOccupancyStatistic.library_id)",
+    # )
 
