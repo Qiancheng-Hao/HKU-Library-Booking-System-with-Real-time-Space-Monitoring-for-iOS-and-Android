@@ -8,11 +8,13 @@ import traceback
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core.seat_occupancy_detector import SeatOccupancyDetector
-import time
 
 
-def get_all_image() -> list[str]:
-    """Get all image files from the test folder
+def get_all_images(folder_path: str) -> list[str]:
+    """Get all image files from the specified folder
+
+    Args:
+        folder_path (str): Path to the folder containing images
 
     Returns:
         list[str]: List of image file paths
@@ -20,54 +22,71 @@ def get_all_image() -> list[str]:
     image_patterns = ['*.jpg', '*.jpeg', '*.png', '*.bmp']
     image_files = []
     for pattern in image_patterns:
-        # create the full search path
-        search_path = os.path.join(TEST_FOLDER, pattern)
-        
-        # glob for files matching the pattern
+        search_path = os.path.join(folder_path, pattern)
         found_files_list = glob.glob(search_path)
-        
-        # Add found files to the list
         image_files.extend(found_files_list)
-    return image_files 
+    return sorted(image_files)
 
 
-def test_model(image_files: list[str], person_class_id, hogging_item_class_id, seat_class_id) -> None:
-    """_summary_
+def get_all_videos(folder_path: str) -> list[str]:
+    """Get all video files from the specified folder
 
     Args:
-        image_files (list[str]): _description_
-        person_class_id (_type_): _description_
-        hogging_item_class_id (_type_): _description_
-        seat_class_id (_type_): _description_
+        folder_path (str): Path to the folder containing videos
+
+    Returns:
+        list[str]: List of video file paths
+    """
+    video_patterns = ['*.mp4', '*.avi', '*.mov', '*.mkv']
+    video_files = []
+    for pattern in video_patterns:
+        search_path = os.path.join(folder_path, pattern)
+        found_files_list = glob.glob(search_path)
+        video_files.extend(found_files_list)
+    return sorted(video_files)
+
+
+def test_images_dual_model(
+    image_files: list[str], 
+    occupancy_model_path: str,
+    seat_model_path: str,
+    person_class_id: int,
+    hogging_item_class_id: list,
+    seat_class_id: list,
+    result_folder: str,
+    model_name: str
+) -> None:
+    """Test dual model (occupancy + seat) on images
+
+    Args:
+        image_files (list[str]): List of image file paths
+        occupancy_model_path (str): Path to occupancy detection model
+        seat_model_path (str): Path to seat detection model
+        person_class_id (int): Class ID for person
+        hogging_item_class_id (list): List of class IDs for hogging items
+        seat_class_id (list): List of class IDs for seats
+        result_folder (str): Folder to save results
+        model_name (str): Name of the model being tested
     """
     detector = SeatOccupancyDetector(
-        occupancy_model_path=OCCUPANCY_MODEL_PATH,
-        seat_model_path=SEAT_MODEL_PATH,
+        occupancy_model_path=occupancy_model_path,
+        seat_model_path=seat_model_path,
         debug_mode=DEBUG_MODE,
         device=DEVICE
     )
     
     for idx, image_path in enumerate(image_files, 1):
-        base_name = os.path.basename(image_path) # get the image name
-        image = cv2.imread(image_path)  # load the image and change to np.ndarray format
+        base_name = os.path.basename(image_path)
+        image = cv2.imread(image_path)
         
-        # Call seat counting function
-        output_path_seat = os.path.join(RESULT_FOLDER_SEATS, base_name)
-        detector.count_total_seats(
-            image,
-            seat_class_id=seat_class_id,
-            confidence_threshold=CONFIDENCE_THRESHOLD,
-            visualize=True,
-            output_path=output_path_seat,
-            imgsz=IMAGE_SIZE
-        )
+        if image is None:
+            print(f"Warning: Failed to load image {image_path}")
+            continue
         
-        # Call Occupancy model 
-        image_adv = image.copy() 
-        output_path_adv = os.path.join(RESULT_FOLDER_OCCUPANCY, base_name)
+        output_path = os.path.join(result_folder, base_name)
         
         result = detector.get_occupancy_stats_with_seats(
-            image_adv,
+            image,
             person_class_id=person_class_id,
             hogging_item_class_id=hogging_item_class_id,
             seat_class_id=seat_class_id, 
@@ -76,45 +95,144 @@ def test_model(image_files: list[str], person_class_id, hogging_item_class_id, s
             confidence_threshold=CONFIDENCE_THRESHOLD,
             seat_expansion_factor=SEAT_EXPANSION_FACTOR, 
             visualize=True,
-            output_path=output_path_adv,
+            output_path=output_path,
             imgsz=IMAGE_SIZE,
             seat_imgsz=SEAT_IMAGE_SIZE,
             location="main_library", 
             area="3/F Old Wing"
         )
-        print(result)
+        
+        # Extract stats from result (result is now a dict with 'stats' and 'visualized_image')
+        stats = result['stats'] if isinstance(result, dict) and 'stats' in result else result
+        print(f"[{model_name}] Image {idx}/{len(image_files)}: {stats}")
+
+
+def test_videos_dual_model(
+    video_files: list[str],
+    occupancy_model_path: str,
+    seat_model_path: str,
+    person_class_id: int,
+    hogging_item_class_id: list,
+    seat_class_id: list,
+    result_folder: str,
+    model_name: str
+) -> None:
+    """Test dual model (occupancy + seat) on videos
+
+    Args:
+        video_files (list[str]): List of video file paths
+        occupancy_model_path (str): Path to occupancy detection model
+        seat_model_path (str): Path to seat detection model
+        person_class_id (int): Class ID for person
+        hogging_item_class_id (list): List of class IDs for hogging items
+        seat_class_id (list): List of class IDs for seats
+        result_folder (str): Folder to save results
+        model_name (str): Name of the model being tested
+    """
+    detector = SeatOccupancyDetector(
+        occupancy_model_path=occupancy_model_path,
+        seat_model_path=seat_model_path,
+        debug_mode=DEBUG_MODE,
+        device=DEVICE
+    )
+    
+    for video_idx, video_path in enumerate(video_files, 1):
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+        output_video_path = os.path.join(result_folder, f"{base_name}_annotated.mp4")
+        
+        print(f"\n[{model_name}] Processing video {video_idx}/{len(video_files)}: {base_name}")
+        
+        # Open video
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"Error: Cannot open video {video_path}")
+            continue
+        
+        # Get video properties
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        print(f"  Video info: {width}x{height}, {fps} FPS, {total_frames} frames")
+        
+        # Create video writer
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+        
+        frame_count = 0
+        start_time = time.time()
+        
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            frame_count += 1
+            
+            # Process frame with detector (no output_path to avoid disk I/O)
+            result = detector.get_occupancy_stats_with_seats(
+                frame,
+                person_class_id=person_class_id,
+                hogging_item_class_id=hogging_item_class_id,
+                seat_class_id=seat_class_id,
+                proximity_threshold=PROXIMITY_THRESHOLD,
+                item_cluster_threshold=ITEM_CLUSTER_THRESHOLD,
+                confidence_threshold=CONFIDENCE_THRESHOLD,
+                seat_expansion_factor=SEAT_EXPANSION_FACTOR,
+                visualize=True,
+                output_path=None,  # Don't save to disk, keep in memory
+                imgsz=IMAGE_SIZE,
+                seat_imgsz=SEAT_IMAGE_SIZE,
+                location="main_library",
+                area="3/F Old Wing"
+            )
+            
+            # Write the annotated frame directly to video (from memory)
+            if 'visualized_image' in result:
+                out.write(result['visualized_image'])
+            
+            # Progress update
+            if frame_count % 30 == 0 or frame_count == total_frames:
+                elapsed = time.time() - start_time
+                progress = (frame_count / total_frames) * 100 if total_frames > 0 else 0
+                processing_fps = frame_count / elapsed if elapsed > 0 else 0
+                print(f"  Progress: {frame_count}/{total_frames} ({progress:.1f}%) - {processing_fps:.1f} FPS")
+        
+        cap.release()
+        out.release()
+        
+        elapsed_time = time.time() - start_time
+        avg_fps = frame_count / elapsed_time if elapsed_time > 0 else 0
+        print(f"  Completed: {frame_count} frames in {elapsed_time:.2f}s (avg {avg_fps:.2f} FPS)")
+        print(f"  Output saved: {output_video_path}")
+
 
     
 if __name__ == "__main__":
     """
-    Self-training model vs Standard model testing script
+    Unified testing script for both images and videos
+    - Tests Standard Model (YOLO11l) and Self-Trained Model
+    - Supports both image and video inputs
     """
 
-    # Initialize all shared and global parameters
+    # ==================== Global Configuration ====================
     test_dir = os.path.dirname(os.path.abspath(__file__))
     computer_vision_dir = os.path.dirname(test_dir)
-    SEAT_MODEL_PATH = os.path.join(computer_vision_dir, "train_models", "yolo11x.pt")
-    TEST_FOLDER = os.path.join(test_dir, 'data', 'ChiWah')
-    RESULT_FOLDER_OCCUPANCY = os.path.join(test_dir, "standard_model_results")
-    RESULT_FOLDER_SEATS = os.path.join(test_dir, "standard_model_seats_results")
     
-    PROXIMITY_THRESHOLD = 150.0  # Distance for person-item association
-    ITEM_CLUSTER_THRESHOLD = 70.0 # Distance for item-item clustering
-    SEAT_EXPANSION_FACTOR = 3   # Factor to expand seat bbox (2 = 100% larger)
-    
+    # Shared parameters
+    PROXIMITY_THRESHOLD = 150.0
+    ITEM_CLUSTER_THRESHOLD = 70.0
+    SEAT_EXPANSION_FACTOR = 3
     IMAGE_SIZE = 640
-    SEAT_IMAGE_SIZE = 640 
-    CONFIDENCE_THRESHOLD = 0.4 
+    SEAT_IMAGE_SIZE = 640
+    CONFIDENCE_THRESHOLD = 0.4
     DEBUG_MODE = False
-    DEVICE = 'auto' 
-    
-    # Ensure result folders exist
-    os.makedirs(RESULT_FOLDER_OCCUPANCY, exist_ok=True)
-    os.makedirs(RESULT_FOLDER_SEATS, exist_ok=True)
+    DEVICE = 'auto'
     
     # Print header
     print("=" * 80)
-    print("Seat Occupancy Detector Testing")
+    print("Seat Occupancy Detector - Unified Testing (Images + Videos)")
     print("=" * 80)
     print(f"PyTorch version: {torch.__version__}")
     print(f"CUDA available: {torch.cuda.is_available()}")
@@ -122,79 +240,160 @@ if __name__ == "__main__":
         print(f"CUDA version: {torch.version.cuda}")
 
     try:
-        # Get all image files in the test folder
-        image_files = get_all_image()
+        # ==================== PART 1: IMAGE TESTING ====================
+        print("\n" + "=" * 80)
+        print("PART 1: IMAGE TESTING")
+        print("=" * 80)
         
-        # Check if any images found
+        # Get all images
+        image_data_folder = os.path.join(test_dir, 'data', 'ChiWah')
+        image_files = get_all_images(image_data_folder)
+        
         if len(image_files) == 0:
-            print(f"\n Error: No image files found in '{TEST_FOLDER}' folder!")
+            print(f"Warning: No images found in '{image_data_folder}'")
         else:
-            image_files.sort()
-            print(f"\n Found {len(image_files)} test images")
+            print(f"Found {len(image_files)} test images\n")
             
-            # Testing the standard model first
-            print("\n" + "=" * 80)
-            print("Testing Standard YOLO Model")
-            print("=" * 80)
-            PERSON_CLASS_ID = 0
-            HOGGING_ITEM_CLASS_ID = [
-                24, # backpack
-                25, # umbrella
-                26, # handbag
-                39, # bottle
-                41, # cup
-                63, # laptop
-                64, # mouse
-                66, # keyboard
-                67, # cell phone
-                73, # book 
-                76  # scissors
-            ]
-            SEAT_CLASS_ID = [56, 57]         # chair and couch
+            # --- Test 1: Standard YOLO Model ---
+            print("\n" + "-" * 80)
+            print("Test 1: Standard YOLO Model (yolo11l.pt)")
+            print("-" * 80)
             
-            OCCUPANCY_MODEL_PATH = os.path.join(computer_vision_dir, "train_models", "yolo11x.pt")
-            test_model(image_files, PERSON_CLASS_ID, HOGGING_ITEM_CLASS_ID, SEAT_CLASS_ID)
-
-            print("\n" + "=" * 80)
-            print("Finished Standard YOLO Model Testing")
-            print("=" * 80)
-            input("\nPress Enter to continue to self-trained model testing...")
-
-            RESULT_FOLDER_OCCUPANCY = os.path.join(test_dir, "self-trained_model_results")
-            RESULT_FOLDER_SEATS = os.path.join(test_dir, "self-trained_model_seats_results")
-            os.makedirs(RESULT_FOLDER_OCCUPANCY, exist_ok=True)
-            os.makedirs(RESULT_FOLDER_SEATS, exist_ok=True)
+            standard_result_folder = os.path.join(test_dir, "standard_model_results")
+            os.makedirs(standard_result_folder, exist_ok=True)
             
-            # Testing the self-trained model
-            # v1: 30, v2:23, mixed v2:15 
-            PERSON_CLASS_ID = 23
-            # v1: 0-29, v2: 0-22, mixed v2: 0-4, 6-14, 16-18
-            HOGGING_ITEM_CLASS_ID = list(range(23))
-            # mixed v2: 5, standard model: 56, 57
-            SEAT_CLASS_ID = [5]
-            SEAT_MODEL_PATH = os.path.join(computer_vision_dir, "models", "mixed", "model_v2", "weights", "best.pt")
-            OCCUPANCY_MODEL_PATH = os.path.join("..", "models", "person_and_item", "v2", "best.pt")
+            standard_occupancy_model = os.path.join(computer_vision_dir, "train_models", "yolo11l.pt")
+            standard_seat_model = os.path.join(computer_vision_dir, "train_models", "yolo11l.pt")
             
-            if not os.path.exists(OCCUPANCY_MODEL_PATH):
-                raise FileNotFoundError(f"Self-trained model not found at path: {OCCUPANCY_MODEL_PATH}")
-            print("\n" + "=" * 80)
-            print("Testing Self-Trained Model")
-            print("=" * 80)
-            current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            print("Start Time:", current_time)
-            test_model(image_files, PERSON_CLASS_ID, HOGGING_ITEM_CLASS_ID, SEAT_CLASS_ID)
-            finished_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            print("Finished Time:", finished_time)
-            print("\n" + "=" * 80)
-            print("Finished Self-Trained Model Testing")
-            print("=" * 80)
-            input("\nPress Enter to exit...")
+            STANDARD_PERSON_CLASS_ID = 0
+            STANDARD_HOGGING_ITEM_CLASS_ID = [24, 25, 26, 39, 41, 63, 64, 66, 67, 73, 76]
+            STANDARD_SEAT_CLASS_ID = [56, 57]
+            
+            start_time = time.time()
+            print(f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            test_images_dual_model(
+                image_files=image_files,
+                occupancy_model_path=standard_occupancy_model,
+                seat_model_path=standard_seat_model,
+                person_class_id=STANDARD_PERSON_CLASS_ID,
+                hogging_item_class_id=STANDARD_HOGGING_ITEM_CLASS_ID,
+                seat_class_id=STANDARD_SEAT_CLASS_ID,
+                result_folder=standard_result_folder,
+                model_name="Standard Model"
+            )
+            
+            elapsed = time.time() - start_time
+            print(f"\nFinished time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Total duration: {elapsed:.2f}s")
+            print(f"Average time per image: {elapsed/len(image_files):.3f}s")
+            print(f"FPS: {len(image_files)/elapsed:.2f}")
+            
+            # --- Test 2: Self-Trained Model ---
+            print("\n" + "-" * 80)
+            print("Test 2: Self-Trained Model (custom weights)")
+            print("-" * 80)
+            
+            custom_result_folder = os.path.join(test_dir, "self-trained_model_results")
+            os.makedirs(custom_result_folder, exist_ok=True)
+            
+            custom_occupancy_model = os.path.join(computer_vision_dir, "models", "mixed", "model_v2", "weights", "best.pt")
+            custom_seat_model = os.path.join(computer_vision_dir, "models", "mixed", "model_v2", "weights", "best.pt")
+            
+            # CUSTOM_PERSON_CLASS_ID = 23
+            CUSTOM_PERSON_CLASS_ID = 15
+            # ignore class ID 12, 19
+            # CUSTOM_HOGGING_ITEM_CLASS_ID = list(range(12)) + list(range(13, 19)) + list(range(20, 23))
+            CUSTOM_HOGGING_ITEM_CLASS_ID = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 13, 14, 16, 17, 18]
+            CUSTOM_SEAT_CLASS_ID = [5]
+            
+            if not os.path.exists(custom_occupancy_model):
+                raise FileNotFoundError(f"Self-trained occupancy model not found: {custom_occupancy_model}")
+            if not os.path.exists(custom_seat_model):
+                raise FileNotFoundError(f"Self-trained seat model not found: {custom_seat_model}")
+            
+            start_time = time.time()
+            print(f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            test_images_dual_model(
+                image_files=image_files,
+                occupancy_model_path=custom_occupancy_model,
+                seat_model_path=custom_seat_model,
+                person_class_id=CUSTOM_PERSON_CLASS_ID,
+                hogging_item_class_id=CUSTOM_HOGGING_ITEM_CLASS_ID,
+                seat_class_id=CUSTOM_SEAT_CLASS_ID,
+                result_folder=custom_result_folder,
+                model_name="Self-Trained Model"
+            )
+            
+            elapsed = time.time() - start_time
+            print(f"\nFinished time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Total duration: {elapsed:.2f}s")
+            print(f"Average time per image: {elapsed/len(image_files):.3f}s")
+            print(f"FPS: {len(image_files)/elapsed:.2f}")
+        
+        # ==================== PART 2: VIDEO TESTING ====================
+        print("\n" + "=" * 80)
+        print("PART 2: VIDEO TESTING")
+        print("=" * 80)
+        
+        # Get all videos
+        video_data_folder = os.path.join(test_dir, 'data', 'main_lib')
+        video_files = get_all_videos(video_data_folder)
+        
+        if len(video_files) == 0:
+            print(f"No videos found in '{video_data_folder}' - Skipping video testing")
+        else:
+            print(f"Found {len(video_files)} test videos\n")
+            
+            # --- Test 3: Standard Model on Videos ---
+            print("\n" + "-" * 80)
+            print("Test 3: Standard YOLO Model - Video Processing")
+            print("-" * 80)
+            
+            # standard_video_result_folder = os.path.join(test_dir, "standard_model_video_results")
+            # os.makedirs(standard_video_result_folder, exist_ok=True)
+            
+            # test_videos_dual_model(
+            #     video_files=video_files,
+            #     occupancy_model_path=standard_occupancy_model,
+            #     seat_model_path=standard_seat_model,
+            #     person_class_id=STANDARD_PERSON_CLASS_ID,
+            #     hogging_item_class_id=STANDARD_HOGGING_ITEM_CLASS_ID,
+            #     seat_class_id=STANDARD_SEAT_CLASS_ID,
+            #     result_folder=standard_video_result_folder,
+            #     model_name="Standard Model (Video)"
+            # )
+            
+            # --- Test 4: Self-Trained Model on Videos ---
+            print("\n" + "-" * 80)
+            print("Test 4: Self-Trained Model - Video Processing")
+            print("-" * 80)
+            
+            custom_video_result_folder = os.path.join(test_dir, "self-trained_model_video_results")
+            os.makedirs(custom_video_result_folder, exist_ok=True)
+            
+            # test_videos_dual_model(
+            #     video_files=video_files,
+            #     occupancy_model_path=custom_occupancy_model,
+            #     seat_model_path=custom_seat_model,
+            #     person_class_id=CUSTOM_PERSON_CLASS_ID,
+            #     hogging_item_class_id=CUSTOM_HOGGING_ITEM_CLASS_ID,
+            #     seat_class_id=CUSTOM_SEAT_CLASS_ID,
+            #     result_folder=custom_video_result_folder,
+            #     model_name="Self-Trained Model (Video)"
+            # )
+        
+        # ==================== COMPLETION ====================
+        print("\n" + "=" * 80)
+        print("ALL TESTS COMPLETED SUCCESSFULLY")
+        print("=" * 80)
+        input("\nPress Enter to exit...")
             
     except FileNotFoundError as e:
         print(f"\nFile Not Found Error: {str(e)}")
-        print("Please ensure your model paths (OCCUPANCY_MODEL_PATH, SEAT_MODEL_PATH) are correct!")
-        print("Ensure class IDs match")
+        print("Please ensure your model paths are correct!")
     except Exception as e:
-        print(f"\n Error Happened: {str(e)}")
+        print(f"\nError occurred: {str(e)}")
         traceback.print_exc()
-        print("\nPlease check your configuration parameters (especially if Class ID is correct)")
+        print("\nPlease check your configuration parameters")

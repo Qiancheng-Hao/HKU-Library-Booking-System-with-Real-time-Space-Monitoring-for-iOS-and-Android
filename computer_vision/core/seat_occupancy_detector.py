@@ -267,9 +267,9 @@ class SeatOccupancyDetector:
         associated_items: List,
         ignored_clusters: List[List],
         seats: List,
-        save_path: str = "debug_output.jpg",
+        save_path: str = None,
         total_occupancy: int = 0
-    ) -> None:
+    ) -> np.ndarray:
         """
         Visualization (Occupancy Model)
         - Persons (Green)
@@ -277,6 +277,9 @@ class SeatOccupancyDetector:
         - Associated Items (Blue - Not Counted)
         - Ignored Clusters (Yellow - Off seats, Not Counted)
         - Seats (Cyan - Reference only)
+        
+        Returns:
+            np.ndarray: Visualized image
         """
         vis_img = image.copy()
         
@@ -351,10 +354,14 @@ class SeatOccupancyDetector:
             cv2.putText(vis_img, text, (10, y_offset), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             y_offset += 30
-            
-        cv2.imwrite(save_path, vis_img)
-        if self.debug_mode:
-            logging.info(f" Visualization result saved to: {save_path}")
+        
+        # Only save to file if save_path is provided
+        if save_path is not None:
+            cv2.imwrite(save_path, vis_img)
+            if self.debug_mode:
+                logging.info(f" Visualization result saved to: {save_path}")
+        
+        return vis_img
 
     # Occupancy Detection with Seat Filtering
     def get_occupancy_stats_with_seats(
@@ -486,11 +493,12 @@ class SeatOccupancyDetector:
         total_occupancy = person_count + hogging_region_count
         
         # Visualization (if needed)
+        visualized_image = None
         if visualize:
             # Convert items_off_seats to cluster format (list of lists)
             ignored_clusters = [items_off_seats] if items_off_seats else []
             
-            self.visualize_detections(
+            visualized_image = self.visualize_detections(
                 image, 
                 persons_boxes, 
                 hogging_item_clusters,      # Red: Counted
@@ -528,7 +536,12 @@ class SeatOccupancyDetector:
         
         if self.debug_mode:
             logging.info(f"  [Final Stats] Occupancy: {total_occupancy} = {person_count} persons + {hogging_region_count} hogging regions")
-        return stats
+        
+        # Return stats with optional visualized image
+        if visualize:
+            return {"stats": stats, "visualized_image": visualized_image}
+        else:
+            return stats
 
     def count_total_seats(
         self,
