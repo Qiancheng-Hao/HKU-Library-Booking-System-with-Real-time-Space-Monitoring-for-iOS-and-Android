@@ -14,13 +14,11 @@ from sqlalchemy import select
 
 class OptimizedBookingSystem:
     """
-    Refactored Booking System that directly interacts with the backend database
-    instead of using Selenium to mimic web interactions.
+    A Booking System that directly interacts with the backend database. 
     """
-    def __init__(self, user_id: uuid.UUID, location: str, type_code: str, date_str: str, sessions: List[str]):
+    def __init__(self, user_id: uuid.UUID, location: str | None, type_code: str | None, date_str: str | None, sessions: List[str] | None):
         """
         Initialize the booking system with database-ready information.
-        
         Args:
             user_id: The UUID of the user making the booking
             location: The library code (mapped to library_id)
@@ -35,57 +33,75 @@ class OptimizedBookingSystem:
         self.sessions = sessions if isinstance(sessions, list) else [sessions]
         self.successful_bookings = {}
         
-        # Mapping legacy HKU library codes to our database library IDs if necessary
-        # In a real scenario, these should ideally be aligned in the DB
+        # Mapping legacy HKU library codes to our local database library IDs. It should change when the db value change
         self.library_id_map = {
-            "3": 1,  # Main Library
-            "5": 2,  # Chi Wah
+            "5": 1,  # Chi Wah Learning Commons
+            "3": 2,  # Main Library
             "6": 3,  # Law Library
-            "8": 4,  # Medical Library
-            "4": 5   # Music Library
         }
         
     def _parse_session(self, session_code: str) -> tuple[time, time]:
-        """Convert HHMMHHMM session code to (start_time, end_time) objects."""
+        """
+        Convert HHMMHHMM session code to (start_time, end_time) objects.
+        Args: 
+            session_code: A string like "09001100" representing 9:00-11:00
+        Returns:
+            A tuple of (start_time, end_time) as time objects
+        """
+        # divide the string into start and end parts
         start_h, start_m = int(session_code[0:2]), int(session_code[2:4])
         end_h, end_m = int(session_code[4:6]), int(session_code[6:8])
+        
+        # Convert to time objects and return
         return time(hour=start_h, minute=start_m), time(hour=end_h, minute=end_m)
 
     def _get_facility_id(self, db, library_id: int, room_name: str) -> Optional[int]:
-        """Find the database facility_id based on library and room name."""
-        # Clean room name (e.g., "258" -> "Room 258" if that's how it's stored)
+        """
+        Find the database facility_id based on library and room name.
+        Args: 
+            db: Database session
+            library_id: The ID of the library in our database
+            room_name: The name of the room (e.g.,  "Discussion Room 01")
+        Returns:
+            The facility_id if found, None otherwise
+        """
+        # try multiple naming patterns to find the facility
         search_names = [room_name, f"Room {room_name}", f"Discussion Room {room_name}", f"Study Room {room_name}"]
         
         for name in search_names:
+            # Query the database for a facility matching this library and name
             stmt = select(Facility).where(
                 Facility.library_id == library_id,
                 Facility.name == name
             )
             facility = db.execute(stmt).scalar_one_or_none()
+            # If we found a matching facility, return its ID
             if facility:
                 return facility.id
+        # If no facility was found with any of the naming patterns, return None
         return None
 
     def get_available_facilities(self) -> Dict[str, Any]:
         """
         Query the database for all available facilities matching the criteria.
-        Returns a list of available room names.
+        Return: 
+            A dictionary of available room names grouped by session.
         """
         try:
             db = SessionLocal()
             
-            # 1. Map legacy location code to library_id
+            # Map legacy location code to library_id
             library_id = self.library_id_map.get(self.location_code)
             if not library_id:
                 return {"success": False, "message": f"Unknown library code: {self.location_code}"}
                 
-            # 2. Parse date
+            # Parse date
             try:
                 booking_date = datetime.strptime(self.date_str, "%Y%m%d").date()
             except ValueError:
                 return {"success": False, "message": "Invalid date format. Expected YYYYMMDD."}
 
-            # 3. Get all facilities in this library
+            # Get all facilities in this library
             stmt = select(Facility).where(Facility.library_id == library_id)
             all_facilities = db.execute(stmt).scalars().all()
             
@@ -126,17 +142,20 @@ class OptimizedBookingSystem:
     def execute_booking(self, rooms: List[str]) -> Dict[str, Any]:
         """
         Execute the booking by creating records in the database.
-        Returns a dictionary of results with detailed failure reasons.
+        Args: 
+            rooms: A list of room names corresponding to the requested sessions (in the same order).
+        Return:
+            a dictionary of results with detailed failure reasons.
         """
         db = SessionLocal()
         service = ReservationService(db)
         
-        # 1. Map legacy location code to library_id
+        # Map legacy location code to library_id
         library_id = self.library_id_map.get(self.location_code)
         if not library_id:
             return {"success": False, "message": f"Unknown library code: {self.location_code}"}
             
-        # 2. Parse date
+        # Parse date
         try:
             booking_date = datetime.strptime(self.date_str, "%Y%m%d").date()
         except ValueError:
@@ -188,7 +207,7 @@ class OptimizedBookingSystem:
                     
                 except Exception as e:
                     # Extract error message (handle FastAPI HTTPException if needed)
-                    err_msg = str(e.detail) if hasattr(e, 'detail') else str(e)
+                    err_msg = getattr(e, 'detail', str(e))
                     session_errors.append(f"{room_name}: {err_msg}")
                     db.rollback()
                     continue
@@ -204,10 +223,3 @@ class OptimizedBookingSystem:
             "total_requested": len(self.sessions),
             "total_successful": len(self.successful_bookings)
         }
-
-    # Dummy methods for backward compatibility with BookingAgent
-    def initialize_multiple_drivers(self): pass
-    def pre_login(self, driver): return True
-    def concurrent_booking_attempt(self, rooms):
-        return self.execute_booking(rooms)
-    def close_all_drivers(self): pass

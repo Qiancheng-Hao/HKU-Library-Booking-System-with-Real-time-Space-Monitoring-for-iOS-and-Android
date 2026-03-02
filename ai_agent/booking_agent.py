@@ -15,13 +15,12 @@ from facility_mapping import (
 import threading
 import time
 import json
-
+import asyncio
 
 class BookingAgent:
     """
     AI Agent that interacts with users to collect booking information
-    and executes the booking process directly in the database.
-    
+    and executes the booking process directly in the database. 
     The agent collects:
     - Location: Library location code
     - Type: Room type code
@@ -33,7 +32,6 @@ class BookingAgent:
     def __init__(self, github_token: str, user_id: Optional[str] = None, model_id: str = "openai/o4-mini"):
         """
         Initialize the booking agent.
-        
         Args:
             github_token: GitHub personal access token for model access
             user_id: The UUID of the user (optional during initialization)
@@ -42,17 +40,21 @@ class BookingAgent:
         self.github_token = github_token
         self.model_id = model_id
         self.user_id = uuid.UUID(user_id) if user_id else None
-        self.agent = None
-        self.collected_info = {
+        self.agent: Optional[ChatAgent] = None
+        self.collected_info: Dict[str, Any] = {
             "location": None,
             "type": None,
             "rooms": None,
             "date": None,
             "sessions": None,
         }
+        if not self.github_token:
+            raise ValueError("GitHub token is required to initialize the BookingAgent.")
         
     async def initialize_agent(self):
-        """Initialize the AI agent with GitHub model and tools."""
+        """
+        Initialize the AI agent with GitHub model and tools.
+        """
         openai_client = AsyncOpenAI(
             base_url="https://models.github.ai/inference",
             api_key=self.github_token,
@@ -132,12 +134,18 @@ class BookingAgent:
             ]
         )
     
-    def set_user_id(self, user_id: str):
-        """Set the user ID for this agent."""
+    def set_user_id(self, user_id: str) -> None:
+        """
+        Set the user ID for this agent.
+        Args: 
+            user_id: The UUID string of the user
+        """
         self.user_id = uuid.UUID(user_id)
 
     def _query_available_facilities(self) -> str:
-        """Query currently available facilities based on collected location, type, date and sessions."""
+        """
+        Query currently available facilities based on collected location, type, date and sessions.
+        """
         if not all([self.collected_info["location"], self.collected_info["type"], 
                    self.collected_info["date"], self.collected_info["sessions"]]):
             return "Need location, type, date, and sessions to check availability."
@@ -170,7 +178,13 @@ class BookingAgent:
             return f"Error checking availability: {str(e)}"
 
     def _convert_location(self, location_name: Annotated[str, "Library location name in natural language (e.g., 'Chi Wah', 'Main Library')"]) -> str:
-        """Convert natural language location name to location code."""
+        """
+        Convert natural language location name to location code.
+        Args: 
+            location_name: The library name mentioned by the user
+        Returns:
+            The location code if conversion successful, or an error message if not.
+        """
         code, message = get_location_code(location_name)
         if code:
             self.collected_info["location"] = code
@@ -179,7 +193,13 @@ class BookingAgent:
             return f"{message}\n\nAvailable locations: {', '.join(LOCATION_NAMES)}"
     
     def _convert_room_type(self, room_type_name: Annotated[str, "Room type name in natural language (e.g., 'study room', 'discussion room')"]) -> str:
-        """Convert natural language room type name to type code."""
+        """
+        Convert natural language room type name to type code.
+        Args:
+            room_type_name: The room type name mentioned by the user
+        Returns:
+            The type code if conversion successful, or an error message if not.
+        """
         location_code = self.collected_info.get("location")
         if not location_code:
             return "Please specify location first before selecting room type."
@@ -193,7 +213,13 @@ class BookingAgent:
             return f"{message}\n\nPlease check available room types for the selected location."
     
     def _collect_rooms(self, rooms: Annotated[str, "Room numbers (e.g., '258', '258-267')"]) -> str:
-        """Collect and store the room numbers."""
+        """
+        Collect and store the room numbers.
+        Args: 
+            rooms: The room numbers mentioned by the user
+        Returns:
+            Confirmation message of collected room numbers.
+        """
         room_list = []
         for part in rooms.split(','):
             part = part.strip()
@@ -207,7 +233,13 @@ class BookingAgent:
         return f"Room numbers recorded: {', '.join(room_list)}."
     
     def _collect_date(self, date: Annotated[str, "Booking date in YYYYMMDD format"]) -> str:
-        """Collect and store the booking date."""
+        """
+        Collect and store the booking date.
+        Args:
+            date: The booking date mentioned by the user in YYYYMMDD format
+        Returns:
+            Confirmation message of collected date or error message if format is invalid.
+        """
         try:
             datetime.strptime(date, "%Y%m%d")
             self.collected_info["date"] = date
@@ -216,13 +248,23 @@ class BookingAgent:
             return "Invalid date format. Please use YYYYMMDD."
     
     def _collect_sessions(self, sessions: Annotated[str, "Time session codes (HHMMHHMM)"]) -> str:
-        """Collect and store the time session codes."""
+        """
+        Collect and store the time session codes.
+        Args:
+            sessions: The time sessions mentioned by the user in HHMMHHMM format
+        Returns: 
+            Confirmation message of collected sessions or error message if format is invalid.
+        """
         session_list = [s.strip() for s in sessions.split(',')]
         self.collected_info["sessions"] = session_list
         return f"Time sessions recorded: {sessions}."
     
     def _check_information_complete(self) -> str:
-        """Check if all required information has been collected."""
+        """
+        Check if all required information has been collected.
+        Returns:
+            Message indicating missing information or that all information is complete.
+        """
         missing = [k for k, v in self.collected_info.items() if v is None]
         if missing:
             return f"Missing information: {', '.join(missing)}."
@@ -231,6 +273,8 @@ class BookingAgent:
     def _execute_booking(self) -> str:
         """
         Execute the booking process directly in the database.
+        Returns:
+            A message indicating the result of the booking attempt.
         """
         if not self.user_id:
             return "Error: User identity not verified. Please log in again."
@@ -273,16 +317,17 @@ class BookingAgent:
     async def chat(self, user_message: str, thread=None) -> str:
         """
         Process a user message and return the agent's response.
-        
         Args:
             user_message: The user's input message
             thread: Optional thread for maintaining conversation context
-            
         Returns:
             The agent's response as a string
         """
         if self.agent is None:
             await self.initialize_agent()
+        
+        # make sure agent is initialized before proceeding
+        assert self.agent is not None
         
         # If no thread provided, create a new one
         if thread is None:
@@ -302,10 +347,12 @@ class BookingAgent:
         if self.agent is None:
             await self.initialize_agent()
         
+        # Ensure agent is initialized before starting conversation
+        assert self.agent is not None
+        
         thread = self.agent.get_new_thread()
         
-        print("Booking Agent: Hello! I'm here to help you book a study room at HKU Library.")
-        print("Booking Agent: I'll need to collect some information from you. Let's get started!\n")
+        print("Booking Agent Initializing ....\n")
         
         # Initial greeting
         greeting = await self.chat("Hello, I need to book a study room.", thread=thread)
@@ -341,14 +388,11 @@ class BookingAgent:
 
 async def main():
     """Example usage of the BookingAgent."""
-    github_token = "hku"
-    if github_token == "hku":
-        print("Please provide a valid GitHub token.")
-        return
+    # Use the token provided by user for testing
+    github_token = ""  # <-- Replace with your GitHub token for testing
     agent = BookingAgent(github_token=github_token)
     await agent.start_conversation()
 
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())

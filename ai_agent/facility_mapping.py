@@ -135,10 +135,8 @@ TYPE_NAMES = {
 def get_location_code(name: str) -> tuple[str | None, str]:
     """
     Get location code from name with fuzzy matching.
-    
     Args:
         name: Location name from user (e.g., "Chi Wah", "main library")
-    
     Returns:
         Tuple of (code, message):
         - code: Location code if found, None otherwise
@@ -147,24 +145,24 @@ def get_location_code(name: str) -> tuple[str | None, str]:
     
     name_lower = name.lower().strip()
     
-    # 1. Exact match
+    # Exact match
     if name_lower in LOCATION_MAP:
         code = LOCATION_MAP[name_lower]
         return code, f"Matched '{name}' → {LOCATION_NAMES[code]}"
     
-    # 2. Partial match (contains)
+    # Partial match (contains)
     for key, code in LOCATION_MAP.items():
         if key in name_lower or name_lower in key:
             return code, f"Matched '{name}' to '{key}' → {LOCATION_NAMES[code]}"
     
-    # 3. Similarity match using difflib
+    # Similarity match using difflib
     matches = get_close_matches(name_lower, LOCATION_MAP.keys(), n=1, cutoff=0.6)
     if matches:
         matched_key = matches[0]
         code = LOCATION_MAP[matched_key]
         return code, f"Best match for '{name}': '{matched_key}' → {LOCATION_NAMES[code]}"
     
-    # 4. No match found
+    # No match found
     available = "\n  - ".join([LOCATION_NAMES[code] for code in sorted(set(LOCATION_MAP.values()))])
     error_msg = f"Cannot recognize '{name}'.\n\nAvailable libraries:\n  - {available}\n\nPlease specify which library you meant."
     return None, error_msg
@@ -173,11 +171,9 @@ def get_location_code(name: str) -> tuple[str | None, str]:
 def get_room_type_code(location_code: str, type_name: str) -> tuple[str | None, str]:
     """
     Get room type code for a specific location with fuzzy matching.
-    
     Args:
         location_code: Location code (e.g., "5")
         type_name: Room type name (e.g., "study room")
-    
     Returns:
         Tuple of (code, message):
         - code: Type code if found, None otherwise
@@ -190,19 +186,19 @@ def get_room_type_code(location_code: str, type_name: str) -> tuple[str | None, 
     type_name_lower = type_name.lower().strip()
     location_types = TYPE_MAP[location_code]
     
-    # 1. Exact match
+    # Exact match
     if type_name_lower in location_types:
         code = location_types[type_name_lower]
         type_full_name = TYPE_NAMES[location_code][code]
         return code, f"Matched '{type_name}' → {type_full_name}"
     
-    # 2. Partial match (contains)
+    # Partial match (contains)
     for key, code in location_types.items():
         if key in type_name_lower or type_name_lower in key:
             type_full_name = TYPE_NAMES[location_code][code]
             return code, f"Matched '{type_name}' to '{key}' → {type_full_name}"
     
-    # 3. Similarity match
+    # Similarity match
     matches = get_close_matches(type_name_lower, location_types.keys(), n=1, cutoff=0.6)
     if matches:
         matched_key = matches[0]
@@ -210,7 +206,7 @@ def get_room_type_code(location_code: str, type_name: str) -> tuple[str | None, 
         type_full_name = TYPE_NAMES[location_code][code]
         return code, f"Best match for '{type_name}': '{matched_key}' → {type_full_name}"
     
-    # 4. No match found
+    # No match found
     available = "\n  - ".join(location_types.keys())
     location_name = LOCATION_NAMES.get(location_code, f"location {location_code}")
     error_msg = f"Cannot recognize room type '{type_name}' at {location_name}.\n\nAvailable types:\n  - {available}\n\nPlease specify which room type you meant."
