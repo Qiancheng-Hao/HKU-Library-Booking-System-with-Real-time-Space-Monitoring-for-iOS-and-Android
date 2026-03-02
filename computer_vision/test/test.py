@@ -6,6 +6,12 @@ import glob
 import time
 import traceback
 import sys
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+load_dotenv(os.path.join(project_root, '.env'))
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core.seat_occupancy_detector import SeatOccupancyDetector
 
@@ -181,7 +187,7 @@ def test_videos_dual_model(
                 confidence_threshold=CONFIDENCE_THRESHOLD,
                 seat_expansion_factor=SEAT_EXPANSION_FACTOR,
                 visualize=True,
-                output_path=None,  # Don't save to disk, keep in memory
+                output_path="", 
                 imgsz=IMAGE_SIZE,
                 seat_imgsz=SEAT_IMAGE_SIZE,
                 location="main_library",
@@ -220,15 +226,29 @@ if __name__ == "__main__":
     test_dir = os.path.dirname(os.path.abspath(__file__))
     computer_vision_dir = os.path.dirname(test_dir)
     
-    # Shared parameters
-    PROXIMITY_THRESHOLD = 150.0
-    ITEM_CLUSTER_THRESHOLD = 70.0
-    SEAT_EXPANSION_FACTOR = 3
-    IMAGE_SIZE = 640
-    SEAT_IMAGE_SIZE = 640
-    CONFIDENCE_THRESHOLD = 0.4
-    DEBUG_MODE = False
-    DEVICE = 'auto'
+    # Shared parameters (loaded from .env)
+    PROXIMITY_THRESHOLD = float(os.getenv('PROXIMITY_THRESHOLD', '150.0'))
+    ITEM_CLUSTER_THRESHOLD = float(os.getenv('ITEM_CLUSTER_THRESHOLD', '70.0'))
+    SEAT_EXPANSION_FACTOR = int(os.getenv('SEAT_EXPANSION_FACTOR', '3'))
+    IMAGE_SIZE = int(os.getenv('IMAGE_SIZE', '640'))
+    SEAT_IMAGE_SIZE = int(os.getenv('SEAT_IMAGE_SIZE', '640'))
+    CONFIDENCE_THRESHOLD = float(os.getenv('CONFIDENCE_THRESHOLD', '0.4'))
+    DEBUG_MODE = os.getenv('DEBUG_MODE', 'False').lower() == 'true'
+    DEVICE = os.getenv('DEVICE', 'auto')
+    
+    # Model paths (loaded from .env)
+    standard_occupancy_model = os.path.join(computer_vision_dir, os.getenv('STANDARD_OCCUPANCY_MODEL_PATH', 'train_models/yolo11l.pt'))
+    standard_seat_model = os.path.join(computer_vision_dir, os.getenv('STANDARD_SEAT_MODEL_PATH', 'train_models/yolo11l.pt'))
+    custom_occupancy_model = os.path.join(computer_vision_dir, os.getenv('CUSTOM_OCCUPANCY_MODEL_PATH', 'models/person_and_item/v4/best.pt'))
+    custom_seat_model = os.path.join(computer_vision_dir, os.getenv('CUSTOM_SEAT_MODEL_PATH', 'models/chair_and_sofa/v3/seat_v3/weights/best.pt'))
+    
+    # Class IDs (loaded from .env)
+    STANDARD_PERSON_CLASS_ID = int(os.getenv('STANDARD_PERSON_CLASS_ID', '0'))
+    STANDARD_HOGGING_ITEM_CLASS_ID = [int(x.strip()) for x in os.getenv('STANDARD_HOGGING_ITEM_CLASS_ID', '24,25,26,39,41,63,64,66,67,73,76').split(',')]
+    STANDARD_SEAT_CLASS_ID = [int(x.strip()) for x in os.getenv('STANDARD_SEAT_CLASS_ID', '56,57').split(',')]
+    CUSTOM_PERSON_CLASS_ID = int(os.getenv('CUSTOM_PERSON_CLASS_ID', '6'))
+    CUSTOM_HOGGING_ITEM_CLASS_ID = [int(x.strip()) for x in os.getenv('CUSTOM_HOGGING_ITEM_CLASS_ID', '0,1,2,3,4,5,7,8,9').split(',')]
+    CUSTOM_SEAT_CLASS_ID = [int(x.strip()) for x in os.getenv('CUSTOM_SEAT_CLASS_ID', '0,1').split(',')]
     
     # Print header
     print("=" * 80)
@@ -246,7 +266,8 @@ if __name__ == "__main__":
         print("=" * 80)
         
         # Get all images
-        image_data_folder = os.path.join(test_dir, 'data', 'ChiWah')
+        image_folder_name = os.getenv('IMAGE_DATA_FOLDER', 'ChiWah')
+        image_data_folder = os.path.join(test_dir, 'data', image_folder_name)
         image_files = get_all_images(image_data_folder)
         
         if len(image_files) == 0:
@@ -261,13 +282,6 @@ if __name__ == "__main__":
             
             standard_result_folder = os.path.join(test_dir, "standard_model_results")
             os.makedirs(standard_result_folder, exist_ok=True)
-            
-            standard_occupancy_model = os.path.join(computer_vision_dir, "train_models", "yolo11l.pt")
-            standard_seat_model = os.path.join(computer_vision_dir, "train_models", "yolo11l.pt")
-            
-            STANDARD_PERSON_CLASS_ID = 0
-            STANDARD_HOGGING_ITEM_CLASS_ID = [24, 25, 26, 39, 41, 63, 64, 66, 67, 73, 76]
-            STANDARD_SEAT_CLASS_ID = [56, 57]
             
             start_time = time.time()
             print(f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -296,16 +310,6 @@ if __name__ == "__main__":
             
             custom_result_folder = os.path.join(test_dir, "self-trained_model_results")
             os.makedirs(custom_result_folder, exist_ok=True)
-            
-            custom_occupancy_model = os.path.join(computer_vision_dir, "models", "mixed", "model_v2", "weights", "best.pt")
-            custom_seat_model = os.path.join(computer_vision_dir, "models", "mixed", "model_v2", "weights", "best.pt")
-            
-            # CUSTOM_PERSON_CLASS_ID = 23
-            CUSTOM_PERSON_CLASS_ID = 15
-            # ignore class ID 12, 19
-            # CUSTOM_HOGGING_ITEM_CLASS_ID = list(range(12)) + list(range(13, 19)) + list(range(20, 23))
-            CUSTOM_HOGGING_ITEM_CLASS_ID = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 13, 14, 16, 17, 18]
-            CUSTOM_SEAT_CLASS_ID = [5]
             
             if not os.path.exists(custom_occupancy_model):
                 raise FileNotFoundError(f"Self-trained occupancy model not found: {custom_occupancy_model}")
@@ -338,7 +342,8 @@ if __name__ == "__main__":
         print("=" * 80)
         
         # Get all videos
-        video_data_folder = os.path.join(test_dir, 'data', 'main_lib')
+        video_folder_name = os.getenv('VIDEO_DATA_FOLDER', 'main_lib')
+        video_data_folder = os.path.join(test_dir, 'data', video_folder_name)
         video_files = get_all_videos(video_data_folder)
         
         if len(video_files) == 0:
@@ -351,19 +356,19 @@ if __name__ == "__main__":
             print("Test 3: Standard YOLO Model - Video Processing")
             print("-" * 80)
             
-            # standard_video_result_folder = os.path.join(test_dir, "standard_model_video_results")
-            # os.makedirs(standard_video_result_folder, exist_ok=True)
+            standard_video_result_folder = os.path.join(test_dir, "standard_model_video_results")
+            os.makedirs(standard_video_result_folder, exist_ok=True)
             
-            # test_videos_dual_model(
-            #     video_files=video_files,
-            #     occupancy_model_path=standard_occupancy_model,
-            #     seat_model_path=standard_seat_model,
-            #     person_class_id=STANDARD_PERSON_CLASS_ID,
-            #     hogging_item_class_id=STANDARD_HOGGING_ITEM_CLASS_ID,
-            #     seat_class_id=STANDARD_SEAT_CLASS_ID,
-            #     result_folder=standard_video_result_folder,
-            #     model_name="Standard Model (Video)"
-            # )
+            test_videos_dual_model(
+                video_files=video_files,
+                occupancy_model_path=standard_occupancy_model,
+                seat_model_path=standard_seat_model,
+                person_class_id=STANDARD_PERSON_CLASS_ID,
+                hogging_item_class_id=STANDARD_HOGGING_ITEM_CLASS_ID,
+                seat_class_id=STANDARD_SEAT_CLASS_ID,
+                result_folder=standard_video_result_folder,
+                model_name="Standard Model (Video)"
+            )
             
             # --- Test 4: Self-Trained Model on Videos ---
             print("\n" + "-" * 80)
@@ -373,16 +378,16 @@ if __name__ == "__main__":
             custom_video_result_folder = os.path.join(test_dir, "self-trained_model_video_results")
             os.makedirs(custom_video_result_folder, exist_ok=True)
             
-            # test_videos_dual_model(
-            #     video_files=video_files,
-            #     occupancy_model_path=custom_occupancy_model,
-            #     seat_model_path=custom_seat_model,
-            #     person_class_id=CUSTOM_PERSON_CLASS_ID,
-            #     hogging_item_class_id=CUSTOM_HOGGING_ITEM_CLASS_ID,
-            #     seat_class_id=CUSTOM_SEAT_CLASS_ID,
-            #     result_folder=custom_video_result_folder,
-            #     model_name="Self-Trained Model (Video)"
-            # )
+            test_videos_dual_model(
+                video_files=video_files,
+                occupancy_model_path=custom_occupancy_model,
+                seat_model_path=custom_seat_model,
+                person_class_id=CUSTOM_PERSON_CLASS_ID,
+                hogging_item_class_id=CUSTOM_HOGGING_ITEM_CLASS_ID,
+                seat_class_id=CUSTOM_SEAT_CLASS_ID,
+                result_folder=custom_video_result_folder,
+                model_name="Self-Trained Model (Video)"
+            )
         
         # ==================== COMPLETION ====================
         print("\n" + "=" * 80)
