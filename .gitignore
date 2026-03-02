@@ -1,0 +1,103 @@
+# ===== FLUTTER FRONTEND IGNORES =====
+# Miscellaneous
+frontend/*.class
+frontend/*.log
+frontend/*.pyc
+frontend/*.swp
+frontend/.DS_Store
+frontend/.atom/
+frontend/.build/
+frontend/.buildlog/
+frontend/.history
+frontend/.svn/
+frontend/.swiftpm/
+frontend/migrate_working_dir/
+
+# IntelliJ related
+frontend/*.iml
+frontend/*.ipr
+frontend/*.iws
+frontend/.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+frontend/**/doc/api/
+frontend/**/ios/Flutter/.last_build_id
+frontend/.dart_tool/
+frontend/.flutter-plugins-dependencies
+frontend/.pub-cache/
+frontend/.pub/
+frontend/build/
+frontend/coverage/
+
+# Symbolication related
+frontend/app.*.symbols
+
+# Obfuscation related
+frontend/app.*.map.json
+
+# Android Studio will place build artifacts here
+frontend/android/app/debug
+frontend/android/app/profile
+frontend/android/app/release
+
+.DS_Store
+
+# ===== BACKEND IGNORES =====
+# Environment files
+.env
+backend/.env
+.env.*
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+env.bak/
+
+# Test / coverage
+.pytest_cache/
+.mypy_cache/
+.coverage*
+htmlcov/
+
+# Logs
+*.log
+
+# IDE / editor
+.vscode/
+.idea/
+*.iml
+
+# OS
+Thumbs.db
+
+# Scripts
+scripts/
+.gitattributes
+computer_vision/yolo11l.pt
+computer_vision/core/__pycache__/seat_occupancy_detector.cpython-312.pyc
+
+# test files
+*.mp4
+*.avi
+*.jpg
+*.png
+
+# Allow images in frontend
+!frontend/**/*.jpg
+!frontend/**/*.png
