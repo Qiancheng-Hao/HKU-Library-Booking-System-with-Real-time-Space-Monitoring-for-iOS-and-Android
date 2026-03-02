@@ -66,24 +66,27 @@ def get_session(session_id: str) -> Optional[BookingAgent]:
 
 
 @mcp.tool
-def create_session(github_token: str, user_id: Optional[str] = None) -> dict:
+def create_session(github_token: str, user_id: str) -> dict:
     """
-    Create a new booking session for a user.
-    Each session maintains isolated agent state and conversation history.
+    Create a new booking session for a specific user.
+    Each session maintains isolated agent state for that user.
     
     Args:
         github_token: GitHub personal access token for model access
-        user_id: Optional user identifier for tracking purposes
+        user_id: The UUID of the user from the database
     
     Returns:
         Dictionary with session_id and status message
     """
     try:
+        if not user_id:
+            return {"status": "error", "message": "user_id is required"}
+            
         # Generate unique session ID
         session_id = str(uuid.uuid4())
         
-        # Create new agent instance for this session
-        agent = BookingAgent(github_token=github_token)
+        # Create new agent instance for this session with the user_id
+        agent = BookingAgent(github_token=github_token, user_id=user_id)
         
         # Store session
         with sessions_lock:
@@ -94,12 +97,12 @@ def create_session(github_token: str, user_id: Optional[str] = None) -> dict:
                 "user_id": user_id
             }
         
-        print(f"Created new session: {session_id} for user: {user_id or 'anonymous'}")
+        print(f"Created new session: {session_id} for user: {user_id}")
         
         return {
             "session_id": session_id,
             "status": "success",
-            "message": f"Session created successfully. Session will expire after {SESSION_TIMEOUT_MINUTES} minutes of inactivity."
+            "message": f"Session created for user {user_id}. Ready for booking."
         }
         
     except Exception as e:
