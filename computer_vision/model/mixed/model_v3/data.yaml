@@ -1,0 +1,17 @@
+path: C:\Users\zeyua\Downloads\COCO_Filtered_YOLO
+train: train/images
+val: val/images
+test: test/images
+
+names:
+  0: person
+  1: backpack
+  2: handbag
+  3: bottle
+  4: laptop
+  5: book
+  6: chair
+  7: bench
+  8: sofa
+  9: ipad
+  10: iphone

@@ -4,8 +4,10 @@ import uuid
 from datetime import datetime, time, date as date_obj
 from typing import List, Dict, Any, Optional
 
-# Add backend to path so we can import its services and models
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
+# Put backend at the front of sys.path so local app package is resolved first.
+backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend'))
+if backend_path not in sys.path:
+    sys.path.insert(0, backend_path)
 
 from app.core.database import SessionLocal
 from app.services.reservation_service import ReservationService

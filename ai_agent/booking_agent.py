@@ -16,6 +16,10 @@ import threading
 import time
 import json
 import asyncio
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class BookingAgent:
     """
@@ -29,15 +33,15 @@ class BookingAgent:
     - Sessions: Time session codes
     """
     
-    def __init__(self, github_token: str, user_id: Optional[str] = None, model_id: str = "openai/o4-mini"):
+    def __init__(self, api_key: str = "", user_id: Optional[str] = None, model_id: str = "deepseek-chat"):
         """
         Initialize the booking agent.
         Args:
-            github_token: GitHub personal access token for model access
+            api_key: DeepSeek API key for model access
             user_id: The UUID of the user (optional during initialization)
-            model_id: The model ID to use
+            model_id: The model ID to use (default: deepseek-chat)
         """
-        self.github_token = github_token
+        self.api_key = api_key or os.environ.get("DEEPSEEK_API_KEY", "")
         self.model_id = model_id
         self.user_id = uuid.UUID(user_id) if user_id else None
         self.agent: Optional[ChatAgent] = None
@@ -48,16 +52,14 @@ class BookingAgent:
             "date": None,
             "sessions": None,
         }
-        if not self.github_token:
-            raise ValueError("GitHub token is required to initialize the BookingAgent.")
         
     async def initialize_agent(self):
         """
         Initialize the AI agent with GitHub model and tools.
         """
         openai_client = AsyncOpenAI(
-            base_url="https://models.github.ai/inference",
-            api_key=self.github_token,
+            base_url="https://api.deepseek.com",
+            api_key=self.api_key,
         )
         
         chat_client = OpenAIChatClient(
@@ -388,9 +390,9 @@ class BookingAgent:
 
 async def main():
     """Example usage of the BookingAgent."""
-    # Use the token provided by user for testing
-    github_token = ""  # <-- Replace with your GitHub token for testing
-    agent = BookingAgent(github_token=github_token)
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    test_user_id = "00000000-0000-0000-0000-000000000001"
+    agent = BookingAgent(api_key=api_key, user_id=test_user_id)
     await agent.start_conversation()
 
 

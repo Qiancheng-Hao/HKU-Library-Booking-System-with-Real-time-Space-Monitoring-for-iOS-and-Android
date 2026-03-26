@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 10
+names: ['backpack', 'bottle', 'calculator', 'ipad', 'laptop', 'pen', 'person', 'phone', 'student_id_card', 'wallet']
+
+roboflow:
+  workspace: fyp-oqmyi
+  project: merge2-k1wou
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/fyp-oqmyi/merge2-k1wou/dataset/1

@@ -239,16 +239,16 @@ if __name__ == "__main__":
     # Model paths (loaded from .env)
     standard_occupancy_model = os.path.join(computer_vision_dir, os.getenv('STANDARD_OCCUPANCY_MODEL_PATH', 'train_models/yolo11l.pt'))
     standard_seat_model = os.path.join(computer_vision_dir, os.getenv('STANDARD_SEAT_MODEL_PATH', 'train_models/yolo11l.pt'))
-    custom_occupancy_model = os.path.join(computer_vision_dir, os.getenv('CUSTOM_OCCUPANCY_MODEL_PATH', 'models/person_and_item/v4/best.pt'))
-    custom_seat_model = os.path.join(computer_vision_dir, os.getenv('CUSTOM_SEAT_MODEL_PATH', 'models/chair_and_sofa/v3/seat_v3/weights/best.pt'))
+    custom_occupancy_model = os.path.join(computer_vision_dir, os.getenv('CUSTOM_OCCUPANCY_MODEL_PATH', 'models/mixed/model_v3/best.pt'))
+    custom_seat_model = os.path.join(computer_vision_dir, os.getenv('CUSTOM_SEAT_MODEL_PATH', 'models/mixed/model_v3/best.pt'))
     
     # Class IDs (loaded from .env)
     STANDARD_PERSON_CLASS_ID = int(os.getenv('STANDARD_PERSON_CLASS_ID', '0'))
     STANDARD_HOGGING_ITEM_CLASS_ID = [int(x.strip()) for x in os.getenv('STANDARD_HOGGING_ITEM_CLASS_ID', '24,25,26,39,41,63,64,66,67,73,76').split(',')]
     STANDARD_SEAT_CLASS_ID = [int(x.strip()) for x in os.getenv('STANDARD_SEAT_CLASS_ID', '56,57').split(',')]
-    CUSTOM_PERSON_CLASS_ID = int(os.getenv('CUSTOM_PERSON_CLASS_ID', '6'))
-    CUSTOM_HOGGING_ITEM_CLASS_ID = [int(x.strip()) for x in os.getenv('CUSTOM_HOGGING_ITEM_CLASS_ID', '0,1,2,3,4,5,7,8,9').split(',')]
-    CUSTOM_SEAT_CLASS_ID = [int(x.strip()) for x in os.getenv('CUSTOM_SEAT_CLASS_ID', '0,1').split(',')]
+    CUSTOM_PERSON_CLASS_ID = int(os.getenv('CUSTOM_PERSON_CLASS_ID', '0'))
+    CUSTOM_HOGGING_ITEM_CLASS_ID = [int(x.strip()) for x in os.getenv('CUSTOM_HOGGING_ITEM_CLASS_ID', '1,2,3,4,5,9,10').split(',')]
+    CUSTOM_SEAT_CLASS_ID = [int(x.strip()) for x in os.getenv('CUSTOM_SEAT_CLASS_ID', '6, 7, 8').split(',')]
     
     # Print header
     print("=" * 80)
@@ -266,7 +266,7 @@ if __name__ == "__main__":
         print("=" * 80)
         
         # Get all images
-        image_folder_name = os.getenv('IMAGE_DATA_FOLDER', 'ChiWah')
+        image_folder_name = os.getenv('IMAGE_DATA_FOLDER', 'chi_wah')
         image_data_folder = os.path.join(test_dir, 'data', image_folder_name)
         image_files = get_all_images(image_data_folder)
         
