@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
 from app.models import Facility, Reservation, ReservationStatus
 from app.schemas.reservation import FacilityTimeslotResponse, TimeSlot, TimeSlotStatus
+from app.services.reservation_service import ReservationService
 
 router = APIRouter(prefix="/facilities", tags=["Facilities"])
 
@@ -18,12 +19,8 @@ def get_facility_timeslots(
     slot_minutes: int | None = Query(default=None, ge=15, le=240),
     db: Session = Depends(get_db),
 ) -> FacilityTimeslotResponse:
-    facility = db.get(Facility, facility_id)
-    if not facility:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Facility not found.",
-        )
+    reservation_service = ReservationService(db)
+    facility = reservation_service.get_facility(facility_id)
 
     interval = slot_minutes or facility.slot_interval_minutes
     if interval <= 0:

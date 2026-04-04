@@ -25,10 +25,20 @@ class ReservationService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Facility not found.",
             )
+        if not facility.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Facility is inactive.",
+            )
+        if not facility.is_bookable:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Facility is not currently bookable.",
+            )
         return facility
 
     def ensure_slot_within_facility_hours(
-        self, facility: Facility, start_time: time, end_time: time
+        self, facility: Facility, reservation_date: date, start_time: time, end_time: time
     ) -> None:
         if start_time >= end_time:
             raise HTTPException(
@@ -45,7 +55,6 @@ class ReservationService:
         duration = datetime.combine(date.min, end_time) - datetime.combine(date.min, start_time)
         slot_minutes = int(duration.total_seconds() // 60)
         if slot_minutes % facility.slot_interval_minutes != 0:
-            # Allow non-standard duration if it ends exactly at closing time (truncated slot)
             if end_time != facility.close_time:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -131,6 +140,46 @@ class ReservationService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Reservations can be made up to {settings.reservation_lead_days} days in advance.",
             )
+
+    def create_confirmed_reservation(
+        self,
+        *,
+        user_id: uuid.UUID,
+        facility_id: int,
+        reservation_date: date,
+        start_time: time,
+        end_time: time,
+        notes: str | None = None,
+    ) -> Reservation:
+        facility = self.get_facility(facility_id)
+        self.enforce_lead_time(reservation_date)
+        self.ensure_slot_within_facility_hours(facility, reservation_date, start_time, end_time)
+        self.ensure_slot_available(
+            facility_id=facility.id,
+            reservation_date=reservation_date,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        self.ensure_user_has_no_overlap(
+            user_id=user_id,
+            reservation_date=reservation_date,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+        reservation = Reservation(
+            user_id=user_id,
+            facility_id=facility.id,
+            reservation_date=reservation_date,
+            start_time=start_time,
+            end_time=end_time,
+            status=ReservationStatus.confirmed,
+            notes=notes,
+        )
+        self.db.add(reservation)
+        self.db.commit()
+        self.db.refresh(reservation)
+        return reservation
 
     def cancel_reservation(self, reservation: Reservation) -> None:
         self.db.delete(reservation)

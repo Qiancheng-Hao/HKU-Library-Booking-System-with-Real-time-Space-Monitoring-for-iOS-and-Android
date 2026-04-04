@@ -66,6 +66,17 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(
         default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES"
     )
+    ai_agent_enabled: bool = Field(default=True, alias="AI_AGENT_ENABLED")
+    ai_agent_base_url: str = Field(
+        default="http://127.0.0.1:8001", alias="AI_AGENT_BASE_URL"
+    )
+    ai_agent_timeout_seconds: float = Field(
+        default=10.0, alias="AI_AGENT_TIMEOUT_SECONDS"
+    )
+    ai_agent_shared_secret: str = Field(default="", alias="AI_AGENT_SHARED_SECRET")
+    ai_session_timeout_minutes: int = Field(
+        default=30, alias="AI_SESSION_TIMEOUT_MINUTES"
+    )
     
     # Computer Vision settings
     cv_device: str = Field(default="auto", alias="CV_DEVICE")

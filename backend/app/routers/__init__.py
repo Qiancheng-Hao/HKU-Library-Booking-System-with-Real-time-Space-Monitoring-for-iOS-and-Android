@@ -1,5 +1,4 @@
-from . import auth, facilities, libraries, occupancy_cv, reservations
+from . import ai, auth, facilities, libraries, occupancy_cv, reservations
 
-__all__ = ["auth", "facilities", "libraries", "occupancy_cv", "reservations"]
-
+__all__ = ["ai", "auth", "facilities", "libraries", "occupancy_cv", "reservations"]
 

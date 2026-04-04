@@ -18,6 +18,7 @@ def list_libraries(db: Session = Depends(get_db)) -> LibraryListResponse:
     stmt = (
         select(
             Library.id,
+            Library.legacy_code,
             Library.name,
             Library.location,
             Library.campus,
@@ -32,6 +33,7 @@ def list_libraries(db: Session = Depends(get_db)) -> LibraryListResponse:
     items = [
         LibrarySummary(
             id=row.id,
+            legacy_code=row.legacy_code,
             name=row.name,
             location=row.location,
             campus=row.campus,

@@ -8,6 +8,8 @@ class FacilityBase(BaseModel):
 
     id: int
     library_id: int
+    room_no: str | None = None
+    facility_type_code: str | None = None
     name: str
     type: str
     capacity: int
@@ -16,20 +18,22 @@ class FacilityBase(BaseModel):
     close_time: time
     slot_interval_minutes: int
     floor: int = 1
-    x_coordinate: int = 0
-    y_coordinate: int = 0
-    width: int = 0
-    height: int = 0
+    is_active: bool = True
+    is_bookable: bool = True
 
 class FacilitySummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     library_id: int
+    room_no: str | None = None
+    facility_type_code: str | None = None
     name: str
     type: str
     capacity: int
     library_name: str
+    is_active: bool = True
+    is_bookable: bool = True
 
 class FacilityDetail(FacilityBase):
     pass

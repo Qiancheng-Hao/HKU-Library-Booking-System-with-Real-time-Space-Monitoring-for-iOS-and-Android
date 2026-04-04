@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
-from app.models import Reservation, ReservationStatus
+from app.models import Reservation
 from app.schemas.reservation import ReservationCreate, ReservationPublic, ReservationListResponse
 from app.services.reservation_service import ReservationService
 
@@ -27,37 +27,14 @@ def create_reservation(
         )
 
     service = ReservationService(db)
-    facility = service.get_facility(payload.facility_id)
-    service.enforce_lead_time(payload.reservation_date)
-    service.ensure_slot_within_facility_hours(
-        facility, payload.start_time, payload.end_time
-    )
-    service.ensure_slot_available(
-        facility_id=facility.id,
-        reservation_date=payload.reservation_date,
-        start_time=payload.start_time,
-        end_time=payload.end_time,
-    )
-    service.ensure_user_has_no_overlap(
+    reservation = service.create_confirmed_reservation(
         user_id=user_id,
+        facility_id=payload.facility_id,
         reservation_date=payload.reservation_date,
         start_time=payload.start_time,
         end_time=payload.end_time,
-    )
-
-    reservation = Reservation(
-        user_id=user_id,
-        facility_id=facility.id,
-        reservation_date=payload.reservation_date,
-        start_time=payload.start_time,
-        end_time=payload.end_time,
-        status=ReservationStatus.confirmed,
         notes=payload.notes,
     )
-
-    db.add(reservation)
-    db.commit()
-    db.refresh(reservation)
 
     stmt = (
         select(Reservation)
