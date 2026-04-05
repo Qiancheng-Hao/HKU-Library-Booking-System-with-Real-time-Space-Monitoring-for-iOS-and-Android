@@ -12,6 +12,7 @@ class Settings(BaseSettings):
         env_file=("backend/.env", ".env", "backend/env.example"),
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
     
     # Application settings

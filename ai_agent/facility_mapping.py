@@ -80,31 +80,31 @@ TYPE_MAP = {
     }
 }
 
-# Room number ranges for each facility type
-# Structure: {location_code: {type_code: [room_ranges]}}
-ROOM_RANGES = {
+# Human-friendly facility name hints for each facility type.
+# Structure: {location_code: {type_code: [facility_name_hints]}}
+ROOM_NAME_HINTS = {
     "3": {  # Main Library
-        "21": ["126-129", "1041", "131-133", "135-144"],  # Discussion Room
-        "33": ["533-534", "538-541", "542", "544", "547-548"],  # Computer in LTC
-        "34": ["537"],  # Studio and Editing Room
-        "35": ["549-553"],  # Concept and Creation Room
-        "31": ["398-404", "405-408"],  # Single Study Room
-        "23": ["334-342", "343", "344", "345-397", "1037-1038"],  # Study Table
+        "21": ["Discussion Room 1-4", "Discussion Room 5", "Discussion Room 6-8", "Discussion Room 10-19"],
+        "33": ["iMac 1-6", "PC 1", "PC 3-5"],
+        "34": ["Editing Room 2"],
+        "35": ["CC Room 1-5"],
+        "31": ["Room 422-428", "Room 432-435"],
+        "23": ["Study Table 1-66"],
     },
     "5": {  # Chi Wah Learning Commons
-        "29": ["258-261", "263-266", "268-271", "274-275"],  # Study room
-        "56": ["1059", "1061-1063"],  # Study booth
+        "29": ["Study Room 2-5", "Study Room 7-10", "Study Room 12-15", "Study Room 18-19"],
+        "56": ["Study Booth A", "Study Booth B", "Study Booth C", "Study Booth D"],
     },
     "6": {  # Law Library
-        "23": ["411-437", "438", "439", "440-477", "478", "479", "480", "482-499"],  # Study table
-        "21": ["281-286"],  # Discussion Room
+        "23": ["Study Table R1-R88"],
+        "21": ["Discussion Room 1-6"],
     },
     "8": {  # Medical Library
-        "21": ["501-506"],  # Discussion Room
-        "30": ["532", "632", "628-629"],  # Single study room
+        "21": ["Discussion Room 1-6"],
+        "30": ["ALG28", "ALG29", "ALG30", "ALG31"],
     },
     "4": {  # Music Library
-        "21": ["313-315"],  # Discussion Room
+        "21": ["Discussion Room 1-3"],
     }
 }
 
@@ -236,11 +236,11 @@ def get_room_range_suggestions(location_code: str, type_code: str) -> str:
     Returns:
         Formatted string with room range suggestions
     """
-    if location_code not in ROOM_RANGES:
+    if location_code not in ROOM_NAME_HINTS:
         return ""
     
-    if type_code not in ROOM_RANGES[location_code]:
+    if type_code not in ROOM_NAME_HINTS[location_code]:
         return ""
     
-    ranges = ROOM_RANGES[location_code][type_code]
-    return f"Available room ranges: {', '.join(ranges)}"
+    names = ROOM_NAME_HINTS[location_code][type_code]
+    return f"Suggested facilities: {', '.join(names)}"

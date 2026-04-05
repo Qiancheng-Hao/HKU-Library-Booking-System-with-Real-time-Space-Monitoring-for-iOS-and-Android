@@ -6,13 +6,17 @@ import 'screens/settings_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/ai_agent_screen.dart';
 import 'providers/auth_provider.dart';
+import 'providers/ai_session_provider.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => AuthProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => AiSessionProvider()),
+      ],
       child: const MyApp(),
     ),
   );

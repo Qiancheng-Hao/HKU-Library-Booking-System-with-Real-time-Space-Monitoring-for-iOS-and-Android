@@ -7,12 +7,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from booking_system import OptimizedBookingSystem
 from facility_mapping import LOCATION_NAMES, TYPE_NAMES
 
+load_dotenv()
 
 app = FastAPI(title="HKU Library AI Agent API")
 
@@ -88,9 +90,21 @@ def _normalize_rooms(rooms: list[str] | None) -> list[str]:
         return []
     normalized: list[str] = []
     for room in rooms:
-        match = re.search(r"(\d+)$", room.strip())
-        normalized.append(match.group(1) if match else room.strip())
+        value = room.strip()
+        match = re.search(r"([A-Za-z]*\d+|[A-Za-z]+)$", value)
+        normalized.append(match.group(1) if match else value)
     return list(dict.fromkeys(normalized))
+
+
+def _room_option_sort_key(room: str) -> tuple:
+    value = room.strip()
+    if value.isdigit():
+        return (0, int(value))
+    match = re.match(r"^([A-Za-z]+)(\d+)$", value)
+    if match:
+        prefix, number = match.groups()
+        return (1, prefix.lower(), int(number))
+    return (2, value.lower())
 
 
 def _format_session_code(session_code: str) -> str:
@@ -174,12 +188,32 @@ def _availability_payload(collected_info: dict[str, Any], user_id: str) -> tuple
         warnings.append(result.get("message", "Availability query failed."))
         return suggested_options, booking_preview, warnings
 
-    available_rooms: list[str] = []
+    available_full_rooms: list[str] = []
     for rooms in result.get("available_facilities", {}).values():
-        available_rooms.extend(_normalize_rooms(rooms))
-    suggested_options["rooms"] = list(dict.fromkeys(available_rooms))
-    if not collected_info["rooms"]:
-        booking_preview["candidate_rooms"] = suggested_options["rooms"]
+        available_full_rooms.extend(rooms)
+
+    # Preserve backend order while removing duplicates.
+    dedup_full_rooms = list(dict.fromkeys([room.strip() for room in available_full_rooms if room and room.strip()]))
+
+    available_short_rooms = _normalize_rooms(dedup_full_rooms)
+    suggested_options["rooms"] = sorted(
+        list(dict.fromkeys(available_short_rooms)),
+        key=_room_option_sort_key,
+    )
+
+    # Build a best-effort mapping from short tokens (e.g., "2", "R55", "A") back to full names.
+    short_to_full: dict[str, str] = {}
+    for full_name, short_name in zip(dedup_full_rooms, _normalize_rooms(dedup_full_rooms)):
+        short_to_full.setdefault(short_name, full_name)
+
+    if collected_info["rooms"]:
+        preview_rooms: list[str] = []
+        for selected in collected_info["rooms"]:
+            key = selected.strip()
+            preview_rooms.append(short_to_full.get(key, selected))
+        booking_preview["candidate_rooms"] = preview_rooms
+    else:
+        booking_preview["candidate_rooms"] = dedup_full_rooms
     return suggested_options, booking_preview, warnings
 
 
@@ -265,7 +299,7 @@ async def chat_with_agent_endpoint(
         await agent.initialize_agent()
 
     if session["thread"] is None:
-        session["thread"] = agent.agent.get_new_thread()
+        session["thread"] = agent.agent.create_session()
 
     reply = await agent.chat(payload.message, thread=session["thread"])
     return _build_state_payload(session_id, reply=reply)

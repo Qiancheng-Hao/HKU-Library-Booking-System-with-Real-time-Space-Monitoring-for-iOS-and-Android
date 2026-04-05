@@ -203,12 +203,6 @@ class AIConfirmationService:
         room_name: str,
         room_type_code: str | None,
     ) -> Facility:
-        candidates = [
-            room_name.strip(),
-            f"Room {room_name.strip()}",
-            f"Discussion Room {room_name.strip()}",
-            f"Study Room {room_name.strip()}",
-        ]
         stmt = select(Facility).where(
             Facility.library_id == library_id,
             Facility.is_active.is_(True),
@@ -217,15 +211,42 @@ class AIConfirmationService:
         if room_type_code:
             stmt = stmt.where(Facility.facility_type_code == room_type_code)
 
+        facilities = self.db.execute(stmt).scalars().all()
+
+        input_value = room_name.strip()
+        normalized_input = input_value.lower()
         normalized_room_name = self._normalize_room_no(room_name)
-        if normalized_room_name.isdigit():
-            stmt = stmt.where(
-                (Facility.room_no == normalized_room_name)
-                | (func.lower(Facility.name).in_([candidate.lower() for candidate in candidates]))
-            )
-        else:
-            stmt = stmt.where(func.lower(Facility.name).in_([candidate.lower() for candidate in candidates]))
-        facility = self.db.execute(stmt).scalars().first()
+
+        for facility in facilities:
+            facility_name = (facility.name or "").strip()
+            facility_name_lower = facility_name.lower()
+            facility_room_no = (facility.room_no or "").strip()
+            facility_last_token = facility_name.split(" ")[-1].lower() if facility_name else ""
+
+            # 1) Exact full-name match
+            if facility_name_lower == normalized_input:
+                return facility
+
+            # 2) Exact stable room-code match (e.g., 258)
+            if normalized_room_name and facility_room_no == normalized_room_name:
+                return facility
+
+            # 3) Suffix token match (e.g., 4 -> CC Room 4, A -> Study Booth A)
+            if facility_last_token == normalized_input:
+                return facility
+
+            # 4) Prefix-friendly forms (e.g., "Room 4", "Study Room 4")
+            if normalized_input in {
+                f"room {facility_last_token}",
+                f"discussion room {facility_last_token}",
+                f"study room {facility_last_token}",
+                f"study table {facility_last_token}",
+                f"cc room {facility_last_token}",
+                f"study booth {facility_last_token}",
+            }:
+                return facility
+
+        facility = None
         if not facility:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Facility {room_name} not found in selected library.")
         return facility

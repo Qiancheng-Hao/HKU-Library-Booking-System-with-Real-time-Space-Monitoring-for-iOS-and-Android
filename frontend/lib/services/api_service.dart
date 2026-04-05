@@ -272,6 +272,82 @@ class ApiService {
     }
   }
 
+  // --- AI Agent ---
+
+  static Future<String> createAiSession() async {
+    final headers = await _getAuthHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/ai/session'),
+      headers: headers,
+    );
+    if (response.statusCode == 201) {
+      final data = json.decode(response.body);
+      return data['aiSessionId'];
+    } else if (response.statusCode == 401) {
+      _handleAuthError();
+      throw Exception('Not authenticated');
+    } else {
+      throw Exception('Failed to create AI session: ${response.statusCode}');
+    }
+  }
+
+  static Future<Map<String, dynamic>> chatWithAi({
+    required String aiSessionId,
+    required String message,
+  }) async {
+    final headers = await _getAuthHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/ai/chat'),
+      headers: headers,
+      body: json.encode({'aiSessionId': aiSessionId, 'message': message}),
+    );
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else if (response.statusCode == 401) {
+      _handleAuthError();
+      throw Exception('Not authenticated');
+    } else {
+      final err = json.decode(response.body);
+      throw Exception(
+        err['detail'] ?? 'Failed to chat: ${response.statusCode}',
+      );
+    }
+  }
+
+  static Future<Map<String, dynamic>> confirmAiBooking({
+    required String aiSessionId,
+    required List<String> selectedRooms,
+  }) async {
+    final headers = await _getAuthHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/ai/confirm'),
+      headers: headers,
+      body: json.encode({
+        'aiSessionId': aiSessionId,
+        'selectedRooms': selectedRooms,
+        'confirm': true,
+      }),
+    );
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else if (response.statusCode == 401) {
+      _handleAuthError();
+      throw Exception('Not authenticated');
+    } else {
+      final err = json.decode(response.body);
+      throw Exception(err['detail'] ?? 'Failed to confirm booking');
+    }
+  }
+
+  static Future<void> resetAiSession(String aiSessionId) async {
+    final headers = await _getAuthHeaders();
+    await http.post(
+      Uri.parse('$baseUrl/api/v1/ai/reset'),
+      headers: headers,
+      body: json.encode({'aiSessionId': aiSessionId}),
+    );
+  }
+
   // --- Occupancy ---
 
   static Future<Map<String, dynamic>> getRealtimeOccupancy({
