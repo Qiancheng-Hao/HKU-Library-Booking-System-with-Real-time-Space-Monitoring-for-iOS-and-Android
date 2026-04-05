@@ -44,26 +44,35 @@ TYPE_MAP = {
         "discussion": "21",
         "computer": "33",
         "computer in ltc": "33",
+        "ltc computer": "33",
         "studio": "34",
         "studio and editing room": "34",
         "editing room": "34",
         "concept and creation room": "35",
         "concept room": "35",
         "creation room": "35",
+        "cc room": "35",
         "single study room": "31",
+        "single study": "31",
         "study table": "23",
     },
     "5": {  # Chi Wah Learning Commons
         "study room": "29",
+        "study booth": "56",
+        "booth": "56",
     },
     "6": {  # Law Library
         "study room": "23",
+        "study table": "23",
         "discussion room": "21",
         "discussion": "21",
     },
     "8": {  # Medical Library
         "discussion room": "21",
         "discussion": "21",
+        "single study room": "30",
+        "single study": "30",
+        "alg": "30",
     },
     "4": {  # Music Library
         "discussion room": "21",
@@ -75,21 +84,24 @@ TYPE_MAP = {
 # Structure: {location_code: {type_code: [room_ranges]}}
 ROOM_RANGES = {
     "3": {  # Main Library
-        "21": ["126-133", "135-144"],  # Discussion Room
-        "33": ["533-541", "542-548"],  # Computer in LTC
+        "21": ["126-129", "1041", "131-133", "135-144"],  # Discussion Room
+        "33": ["533-534", "538-541", "542", "544", "547-548"],  # Computer in LTC
         "34": ["537"],  # Studio and Editing Room
-        "31": ["398-404"],  # Single Study Room
-        "23": ["334-397"],  # Study Table
+        "35": ["549-553"],  # Concept and Creation Room
+        "31": ["398-404", "405-408"],  # Single Study Room
+        "23": ["334-342", "343", "344", "345-397", "1037-1038"],  # Study Table
     },
     "5": {  # Chi Wah Learning Commons
-        "29": ["258-266", "268-271", "274-275"],  # Study room
+        "29": ["258-261", "263-266", "268-271", "274-275"],  # Study room
+        "56": ["1059", "1061-1063"],  # Study booth
     },
     "6": {  # Law Library
-        "23": ["411-499"],  # Study room
+        "23": ["411-437", "438", "439", "440-477", "478", "479", "480", "482-499"],  # Study table
         "21": ["281-286"],  # Discussion Room
     },
     "8": {  # Medical Library
         "21": ["501-506"],  # Discussion Room
+        "30": ["532", "632", "628-629"],  # Single study room
     },
     "4": {  # Music Library
         "21": ["313-315"],  # Discussion Room
@@ -118,16 +130,18 @@ TYPE_NAMES = {
     },
     "5": {
         "29": "Study Room",
+        "56": "Study Booth (1F)",
     },
     "6": {
-        "23": "Study Room",
-        "21": "Discussion Room",
+        "23": "Study Table (2F)",
+        "21": "Discussion Room (2F)",
     },
     "8": {
-        "21": "Discussion Room",
+        "21": "Discussion Room (G)",
+        "30": "Single Study Room (M)",
     },
     "4": {
-        "21": "Discussion Room",
+        "21": "Discussion Room (11F)",
     }
 }
 

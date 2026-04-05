@@ -18,6 +18,10 @@ class FacilityBase(BaseModel):
     close_time: time
     slot_interval_minutes: int
     floor: int = 1
+    x_coordinate: float = 0.0
+    y_coordinate: float = 0.0
+    width: float = 10.0
+    height: float = 10.0
     is_active: bool = True
     is_bookable: bool = True
 
@@ -32,6 +36,10 @@ class FacilitySummary(BaseModel):
     type: str
     capacity: int
     library_name: str
+    x_coordinate: float = 0.0
+    y_coordinate: float = 0.0
+    width: float = 10.0
+    height: float = 10.0
     is_active: bool = True
     is_bookable: bool = True
 

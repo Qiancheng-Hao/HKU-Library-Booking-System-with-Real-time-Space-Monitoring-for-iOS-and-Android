@@ -293,13 +293,17 @@ class _LibraryListItemState extends State<LibraryListItem> {
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      "Select $type",
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Text(
+                        type,
+                        maxLines: 2,
+                        softWrap: true,
+                        overflow: TextOverflow.visible,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     IconButton(

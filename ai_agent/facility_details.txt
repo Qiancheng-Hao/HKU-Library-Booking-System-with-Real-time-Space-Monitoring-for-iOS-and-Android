@@ -4,47 +4,76 @@ Location:
     type: 
     "21": Discussion Room (3F)
         facilities:
-        "126 - 133": Discussion room 1 to Discussion room 8
+        "126 - 129": Discussion room 1 to Discussion room 4
+        "1041": Discussion room 5
+        "131 - 133": Discussion room 6 to Discussion room 8
         "135 - 144" Discussion room 10 to Discussion room 19
     "33" : Computer in LTC (2F)
         facilities:
-        "533 - 541": iMac 1 to iMac 6
-        "542 - 548": PC 1 to PC 5
+        "533 - 534": iMac 1 to iMac 2
+        "538 - 541": iMac 3 to iMac 6
+        "542": PC 1 
+        "544": PC 3
+        "547 - 548": PC 4 to PC 5
     "34": Studio and Editing Room(2F)
         facilities:
-        "537": Studio and Editing Room
+        "537": Editing Room 2
     "35": Concept and Creation Room(2F)
         facilities: 
-        ""
+        "549 - 553": CC Room 1 to CC Room 5
     "31": Single Study Room (4F)
         facilities: 
-        "398-404": Study Room
-
+        "398-404": Room 422 to Room 428
+        "405-408": Room 432 to Room 435
     "23": Study Table (4F)
         facilities: 
-        "334-397": Study Table
+        "334-342": Study Table 1 to Study Table 9
+        "343": Study Table 11
+        "344": Study Table 10
+        "345-397": Study Table 12 to Study Table 64
+        "1037": Study Table 65
+        "1038": Study Table 66
 
 "5" -> Chi Wah Learning Commons
-    "29": study room
+    "29": Study Room
+        facilities (1F):
+        "258 - 261": Study Room 2 to Study Room 5
+        "263 - 266": Study Room 7 to Study Room 10
+        facilities (2F):
+        "268 - 271": Study Room 12 to Study Room 15
+        "274 - 275": Study Room 18 to Study Room 19
+    "56": Study Booth (1F)
         facilities:
-        "258 - 266": study room 2 to study room 10
-        "268 - 271": study room 12 to study room 15
-        "274 - 275": study room 18 o study room 19
+        "1059": Study Booth A
+        "1061 - 1063": Study Booth B - Study Booth D
 
 "6" -> Law Library
-    "23": study room
+    "23": Study Table (2F)
         facilities:
-        "411 - 499": study room 1 to study room 88
-    "21": Discussion Room
+        "411 - 437": Study Table R1 to Study Table R27
+        "438": Study Table R29
+        "439": Study Table R28
+        "440 - 477": Study Table R30 to Study Table R67
+        "478": Study Table R69
+        "479": Study Table R68
+        "480": Study Table R70
+        "482 - 499": Study Table R71 to Study Table R88
+    "21": Discussion Room (2F)
         facilities: 
-        "281-286": Discussion room 1 to room 6
+        "281-286": Discussion Room 1 to Discussion Room 6
     
 "8" -> Medical Library
-    "21": Discussion Room
+    "21": Discussion Room (G)
         facilities:
         "501 - 506": Discussion Room 1 to 6
+    "30" Single Study Room (M)
+        facilities:
+        "532": ALG28
+        "632": ALG29
+        "628": ALG30
+        "629": ALG31
 
 "4" -> Music Library
-    "21": Discussion Room
+    "21": Discussion Room (11F)
         facilities: 
-        "313-315": Discussion Room 1 to 3
+        "313-315": Discussion Room 1 to Discussion Room 3

@@ -65,6 +65,26 @@ class Facility(Base):
     floor: Mapped[int] = mapped_column(
         Integer, default=1, nullable=False, comment="Floor number where the facility is located."
     )
+    x_coordinate: Mapped[float] = mapped_column(
+        default=0.0,
+        nullable=False,
+        comment="X coordinate for facility placement on map layout.",
+    )
+    y_coordinate: Mapped[float] = mapped_column(
+        default=0.0,
+        nullable=False,
+        comment="Y coordinate for facility placement on map layout.",
+    )
+    width: Mapped[float] = mapped_column(
+        default=10.0,
+        nullable=False,
+        comment="Facility width on map layout.",
+    )
+    height: Mapped[float] = mapped_column(
+        default=10.0,
+        nullable=False,
+        comment="Facility height on map layout.",
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,

@@ -69,6 +69,20 @@ class _LibraryMapContent extends StatefulWidget {
 class _LibraryMapContentState extends State<_LibraryMapContent> {
   late int _selectedFloor;
 
+  int _toInt(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is double) return value.round();
+    if (value is num) return value.toInt();
+    return fallback;
+  }
+
+  double _toDouble(dynamic value, {double fallback = 0}) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is num) return value.toDouble();
+    return fallback;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -78,7 +92,7 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
   @override
   Widget build(BuildContext context) {
     final displayedItems = widget.facilities.where((item) {
-      final itemFloor = item['floor'] as int? ?? 1;
+      final itemFloor = _toInt(item['floor'], fallback: 1);
       return itemFloor == _selectedFloor;
     }).toList();
 
@@ -128,16 +142,16 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
                   double mapBaseHeight = 100.0;
 
                   for (var item in displayedItems) {
-                    final x = (item['x_coordinate'] ?? 0) as int;
-                    final y = (item['y_coordinate'] ?? 0) as int;
-                    final w = (item['width'] ?? 0) as int;
-                    final h = (item['height'] ?? 0) as int;
+                    final x = _toDouble(item['x_coordinate']);
+                    final y = _toDouble(item['y_coordinate']);
+                    final w = _toDouble(item['width']);
+                    final h = _toDouble(item['height']);
 
                     if (x + w > mapBaseWidth) {
-                      mapBaseWidth = (x + w).toDouble();
+                      mapBaseWidth = x + w;
                     }
                     if (y + h > mapBaseHeight) {
-                      mapBaseHeight = (y + h).toDouble();
+                      mapBaseHeight = y + h;
                     }
                   }
 
@@ -163,10 +177,16 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
                             ),
 
                             ...displayedItems.map((item) {
-                              final x = (item['x_coordinate'] ?? 50) as int;
-                              final y = (item['y_coordinate'] ?? 50) as int;
-                              final wPercent = (item['width'] ?? 0) as int;
-                              final hPercent = (item['height'] ?? 0) as int;
+                              final x = _toDouble(
+                                item['x_coordinate'],
+                                fallback: 50,
+                              );
+                              final y = _toDouble(
+                                item['y_coordinate'],
+                                fallback: 50,
+                              );
+                              final wPercent = _toDouble(item['width']);
+                              final hPercent = _toDouble(item['height']);
 
                               final left =
                                   (x / mapBaseWidth) * constraints.maxWidth;
@@ -223,12 +243,7 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
   ) {
     final type = (item['type'] as String? ?? '').toLowerCase();
     final name = item['name'] as String? ?? '';
-
-    String identifier = name;
-    final nameParts = name.split(' ');
-    if (nameParts.length > 1) {
-      identifier = nameParts.last;
-    }
+    String identifier = _getMarkerLabel(name);
 
     double defaultWidth = 30;
     double defaultHeight = 30;
@@ -316,6 +331,16 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
         ],
       ),
     );
+  }
+
+  String _getMarkerLabel(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      return '';
+    }
+
+    final parts = trimmed.split(RegExp(r'\s+'));
+    return parts.last;
   }
 }
 
