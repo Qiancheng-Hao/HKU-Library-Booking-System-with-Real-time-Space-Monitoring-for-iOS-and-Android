@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import threading
@@ -15,6 +16,57 @@ from booking_system import OptimizedBookingSystem
 from facility_mapping import LOCATION_NAMES, TYPE_NAMES
 
 load_dotenv()
+
+
+def _env_flag(name: str, default: str = "true") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_log_file_path() -> str:
+    configured_path = os.getenv("AI_AGENT_LOG_FILE_PATH", "logs/ai_agent.log").strip()
+    if os.path.isabs(configured_path):
+        return configured_path
+    return os.path.join(os.path.dirname(__file__), configured_path)
+
+
+def _configure_logging() -> logging.Logger:
+    logger = logging.getLogger("ai_agent")
+    if logger.handlers:
+        return logger
+
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    if not _env_flag("AI_AGENT_LOG_ENABLED", "true"):
+        logger.addHandler(logging.NullHandler())
+        return logger
+
+    log_file_path = _resolve_log_file_path()
+    log_dir = os.path.dirname(log_file_path)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)s %(name)s %(message)s"
+    )
+
+    file_handler = logging.FileHandler(
+        log_file_path,
+        mode="w",
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+
+    logger.info("logging_configured log_file=%s", log_file_path)
+    return logger
+
+
+LOGGER = _configure_logging().getChild("api_server")
 
 app = FastAPI(title="HKU Library AI Agent API")
 
@@ -47,6 +99,8 @@ def cleanup_expired_sessions() -> None:
                     expired_ids.append(session_id)
             for session_id in expired_ids:
                 del sessions[session_id]
+        if expired_ids:
+            LOGGER.info("cleanup_expired_sessions removed_session_ids=%s", expired_ids)
 
 
 cleanup_thread = threading.Thread(target=cleanup_expired_sessions, daemon=True)
@@ -55,6 +109,7 @@ cleanup_thread.start()
 
 def verify_internal_token(x_internal_service_token: str | None = Header(default=None)) -> None:
     if INTERNAL_SHARED_SECRET and x_internal_service_token != INTERNAL_SHARED_SECRET:
+        LOGGER.warning("verify_internal_token_failed token_provided=%s", x_internal_service_token is not None)
         raise HTTPException(status_code=401, detail="Invalid internal service token.")
 
 
@@ -82,6 +137,7 @@ def _build_safe_agent(user_id: str):
                 return f"Cannot execute booking. Missing information: {', '.join(missing)}"
             return "Booking details are ready. Please confirm through the backend service."
 
+    LOGGER.info("build_safe_agent user_id=%s", user_id)
     return BackendSafeBookingAgent(user_id=user_id)
 
 
@@ -217,7 +273,145 @@ def _availability_payload(collected_info: dict[str, Any], user_id: str) -> tuple
     return suggested_options, booking_preview, warnings
 
 
+def _detect_reply_language(session: dict[str, Any]) -> str:
+    thread = session.get("thread")
+    messages = getattr(thread, "messages", None)
+    if not messages:
+        return "en"
+
+    for entry in reversed(messages):
+        if entry.get("role") != "user":
+            continue
+        content = str(entry.get("content") or "")
+        if re.search(r"[\u4e00-\u9fff]", content):
+            return "zh"
+        if content.strip():
+            return "en"
+    return "en"
+
+
+def _build_confirmation_reply_localized(
+    language: str,
+    collected_info: dict[str, Any],
+    booking_preview: dict[str, Any],
+) -> str:
+    details: list[str] = []
+    if language == "zh":
+        if booking_preview.get("library"):
+            details.append(f"地点：{booking_preview['library']}")
+        if collected_info.get("room_type"):
+            details.append(f"类型：{collected_info['room_type']}")
+        if booking_preview.get("date"):
+            details.append(f"日期：{booking_preview['date']}")
+        if booking_preview.get("time_ranges"):
+            details.append(f"时间：{', '.join(booking_preview['time_ranges'])}")
+        if booking_preview.get("candidate_rooms"):
+            details.append(f"房间：{', '.join(booking_preview['candidate_rooms'])}")
+
+        reply = "我已为您整理好预约信息。"
+        if details:
+            reply += "\n\n" + "\n".join(details)
+        reply += "\n\n如果信息无误，请点击“确认预约”完成提交。"
+        return reply
+
+    if booking_preview.get("library"):
+        details.append(f"Location: {booking_preview['library']}")
+    if collected_info.get("room_type"):
+        details.append(f"Type: {collected_info['room_type']}")
+    if booking_preview.get("date"):
+        details.append(f"Date: {booking_preview['date']}")
+    if booking_preview.get("time_ranges"):
+        details.append(f"Time: {', '.join(booking_preview['time_ranges'])}")
+    if booking_preview.get("candidate_rooms"):
+        details.append(f"Room: {', '.join(booking_preview['candidate_rooms'])}")
+
+    reply = "I have prepared your booking details."
+    if details:
+        reply += "\n\n" + "\n".join(details)
+    reply += "\n\nIf everything looks correct, please tap “Confirm Booking” to submit it."
+    return reply
+
+
+def _build_missing_info_reply_localized(
+    language: str,
+    collected_info: dict[str, Any],
+    booking_preview: dict[str, Any],
+    suggested_options: dict[str, list[str]],
+    missing_fields: list[str],
+    fallback_reply: str,
+) -> str:
+    if language == "zh":
+        details: list[str] = []
+        if booking_preview.get("library"):
+            details.append(f"地点：{booking_preview['library']}")
+        if collected_info.get("room_type"):
+            details.append(f"类型：{collected_info['room_type']}")
+        if booking_preview.get("date"):
+            details.append(f"日期：{booking_preview['date']}")
+        if booking_preview.get("time_ranges"):
+            details.append(f"时间：{', '.join(booking_preview['time_ranges'])}")
+
+        if missing_fields == ["rooms"]:
+            available_rooms = suggested_options.get("rooms") or []
+            reply = "我已找到符合条件的可用房间。"
+            if details:
+                reply += "\n\n" + "\n".join(details)
+            if available_rooms:
+                reply += f"\n\n可选房间：{', '.join(available_rooms)}。"
+            reply += "\n\n请先选择一个或多个房间，然后我再为您进入确认步骤。"
+            return reply
+
+        field_labels = {
+            "location": "地点",
+            "room_type": "房间类型",
+            "date": "日期",
+            "sessions": "时间",
+            "rooms": "房间",
+        }
+        missing_labels = [field_labels.get(field, field) for field in missing_fields]
+        reply = "我还需要以下信息才能继续："
+        reply += "\n\n" + "、".join(missing_labels)
+        if fallback_reply:
+            reply += f"\n\n{fallback_reply}"
+        return reply
+
+    details = []
+    if booking_preview.get("library"):
+        details.append(f"Location: {booking_preview['library']}")
+    if collected_info.get("room_type"):
+        details.append(f"Type: {collected_info['room_type']}")
+    if booking_preview.get("date"):
+        details.append(f"Date: {booking_preview['date']}")
+    if booking_preview.get("time_ranges"):
+        details.append(f"Time: {', '.join(booking_preview['time_ranges'])}")
+
+    if missing_fields == ["rooms"]:
+        available_rooms = suggested_options.get("rooms") or []
+        reply = "I found available rooms that match your request."
+        if details:
+            reply += "\n\n" + "\n".join(details)
+        if available_rooms:
+            reply += f"\n\nAvailable rooms: {', '.join(available_rooms)}."
+        reply += "\n\nPlease choose one or more rooms before moving to confirmation."
+        return reply
+
+    field_labels = {
+        "location": "location",
+        "room_type": "room type",
+        "date": "date",
+        "sessions": "time",
+        "rooms": "room",
+    }
+    missing_labels = [field_labels.get(field, field) for field in missing_fields]
+    reply = "I still need the following information before I can continue:"
+    reply += "\n\n" + ", ".join(missing_labels)
+    if fallback_reply:
+        reply += f"\n\n{fallback_reply}"
+    return reply
+
+
 def _build_state_payload(session_id: str, reply: str = "") -> dict[str, Any]:
+    started_at = time.perf_counter()
     session = _get_session_or_raise(session_id)
     agent = session["agent"]
     collected_info = _normalize_collected_info(agent.get_collected_info())
@@ -226,9 +420,26 @@ def _build_state_payload(session_id: str, reply: str = "") -> dict[str, Any]:
         collected_info=collected_info,
         user_id=session["user_id"],
     )
-    return {
+    language = _detect_reply_language(session)
+    reply_text = reply
+    if not missing_fields:
+        reply_text = _build_confirmation_reply_localized(
+            language,
+            collected_info,
+            booking_preview,
+        )
+    elif missing_fields:
+        reply_text = _build_missing_info_reply_localized(
+            language,
+            collected_info,
+            booking_preview,
+            suggested_options,
+            missing_fields,
+            reply,
+        )
+    payload = {
         "status": "success",
-        "reply": reply,
+        "reply": reply_text,
         "collected_info": collected_info,
         "missing_fields": missing_fields,
         "is_complete": not missing_fields,
@@ -246,6 +457,15 @@ def _build_state_payload(session_id: str, reply: str = "") -> dict[str, Any]:
         "last_activity": session["last_activity"],
         "expires_at": session["expires_at"],
     }
+    LOGGER.info(
+        "build_state_payload session_id=%s elapsed_ms=%s missing_fields=%s ready_for_confirmation=%s warnings=%s",
+        session_id,
+        int((time.perf_counter() - started_at) * 1000),
+        missing_fields,
+        not missing_fields,
+        len(warnings),
+    )
+    return payload
 
 
 @app.get("/health")
@@ -262,8 +482,10 @@ def create_session_endpoint(
         raise HTTPException(status_code=400, detail="user_id is required")
 
     try:
+        LOGGER.info("create_session_request user_id=%s", payload.user_id)
         agent = _build_safe_agent(payload.user_id)
     except ModuleNotFoundError as exc:
+        LOGGER.exception("create_session_dependency_error user_id=%s", payload.user_id)
         raise HTTPException(status_code=503, detail=f"AI agent dependencies are unavailable: {exc}") from exc
 
     session_id = str(uuid.uuid4())
@@ -277,6 +499,12 @@ def create_session_endpoint(
             "last_activity": created_at,
             "expires_at": created_at + timedelta(minutes=SESSION_TIMEOUT_MINUTES),
         }
+    LOGGER.info(
+        "create_session_success session_id=%s user_id=%s active_session_count=%s",
+        session_id,
+        payload.user_id,
+        len(sessions),
+    )
     return {
         "status": "success",
         "session_id": session_id,
@@ -292,17 +520,40 @@ async def chat_with_agent_endpoint(
     payload: SessionMessageRequest,
     _: None = Depends(verify_internal_token),
 ) -> dict[str, Any]:
+    started_at = time.perf_counter()
     session = _get_session_or_raise(session_id)
     agent = session["agent"]
+    LOGGER.info(
+        "chat_request_start session_id=%s user_id=%s message_length=%s",
+        session_id,
+        session["user_id"],
+        len(payload.message),
+    )
 
-    if agent.agent is None:
-        await agent.initialize_agent()
+    try:
+        if agent.agent is None:
+            LOGGER.info("chat_initialize_agent session_id=%s", session_id)
+            await agent.initialize_agent()
 
-    if session["thread"] is None:
-        session["thread"] = agent.agent.create_session()
+        if session["thread"] is None:
+            LOGGER.info("chat_create_thread session_id=%s", session_id)
+            session["thread"] = agent.agent.create_session()
 
-    reply = await agent.chat(payload.message, thread=session["thread"])
-    return _build_state_payload(session_id, reply=reply)
+        reply = await agent.chat(payload.message, thread=session["thread"])
+        LOGGER.info(
+            "chat_request_done session_id=%s elapsed_ms=%s reply_length=%s",
+            session_id,
+            int((time.perf_counter() - started_at) * 1000),
+            len(reply),
+        )
+        return _build_state_payload(session_id, reply=reply)
+    except Exception:
+        LOGGER.exception(
+            "chat_request_failed session_id=%s elapsed_ms=%s",
+            session_id,
+            int((time.perf_counter() - started_at) * 1000),
+        )
+        raise
 
 
 @app.get("/internal/v1/sessions/{session_id}")
@@ -310,6 +561,7 @@ def get_session_status_endpoint(
     session_id: str,
     _: None = Depends(verify_internal_token),
 ) -> dict[str, Any]:
+    LOGGER.info("get_session_status_request session_id=%s", session_id)
     return _build_state_payload(session_id)
 
 
@@ -319,6 +571,7 @@ def reset_session_endpoint(
     _: None = Depends(verify_internal_token),
 ) -> dict[str, Any]:
     session = _get_session_or_raise(session_id)
+    LOGGER.info("reset_session_request session_id=%s user_id=%s", session_id, session["user_id"])
     session["agent"].reset()
     session["thread"] = None
     return _build_state_payload(session_id, reply="Session data has been reset.")
@@ -333,6 +586,7 @@ def end_session_endpoint(
         if session_id not in sessions:
             raise HTTPException(status_code=404, detail="Session not found or already ended.")
         del sessions[session_id]
+    LOGGER.info("end_session_success session_id=%s", session_id)
     return {
         "status": "success",
         "message": "Session ended successfully.",
@@ -340,4 +594,5 @@ def end_session_endpoint(
 
 
 if __name__ == "__main__":
+    LOGGER.info("api_server_start host=%s port=%s", SERVER_HOST, SERVER_PORT)
     uvicorn.run(app, host=SERVER_HOST, port=SERVER_PORT)
