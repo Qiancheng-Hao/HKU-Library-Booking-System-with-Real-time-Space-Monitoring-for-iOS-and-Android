@@ -45,11 +45,11 @@ alter table facilities
 
 insert into libraries (legacy_code, name, location, campus, description, opening_hours, latitude, longitude)
 values
-    ('3', 'Main Library', null, null, 'Includes an overnight area available from 17:00 to 08:00 the next day.', '09:00-17:00; overnight area 17:00-08:00 next day', null, null),
-    ('6', 'Lui Che Woo Law Library', '1-2/F Cheng Yu Tung Tower', null, null, '09:00-17:00', null, null),
-    ('4', 'Music Library', '11/F Run Run Shaw Tower', null, null, '08:00-23:00', null, null),
-    ('8', 'Yu Chun Keung Medical Library', 'LG1 William MW Mong Block', null, 'Includes a 24-hour overnight area.', '09:00-17:00; overnight area 24 hours', null, null),
-    ('5', 'Chi Wah Learning Commons', null, null, null, 'Mon-Sun 08:00-06:00 next day', null, null)
+    ('3', 'Main Library', null, null, 'Includes an overnight area available from 17:00 to 08:00 the next day.', '09:00-17:00; overnight area 17:00-08:00 next day', 22.2832614254766, 114.13773611812404),
+    ('6', 'Lui Che Woo Law Library', '1-2/F Cheng Yu Tung Tower', null, null, '09:00-17:00', 22.283282992765464, 114.13383543488779),
+    ('4', 'Music Library', '11/F Run Run Shaw Tower', null, null, '08:00-23:00', 22.283656470916362, 114.13439816701072),
+    ('8', 'Yu Chun Keung Medical Library', 'LG1 William MW Mong Block', null, 'Includes a 24-hour overnight area.', '09:00-17:00; overnight area 24 hours', 22.2672232789928, 114.12852071081022),
+    ('5', 'Chi Wah Learning Commons', null, null, null, 'Mon-Sun 08:00-06:00 next day', 22.283542664339684, 114.1347124794357)
 on conflict (legacy_code) do update
 set
     name = excluded.name,
