@@ -30,6 +30,18 @@ def _pick_existing_path(*candidates: Path) -> Path:
             return candidate
     raise FileNotFoundError("No candidate path exists.")
 
+
+def _resolve_configured_model_path(
+    configured_path: str | None, *fallback_candidates: Path
+) -> Path:
+    if configured_path:
+        raw_path = Path(os.path.expandvars(os.path.expanduser(configured_path)))
+        if raw_path.is_absolute():
+            return _pick_existing_path(raw_path)
+        return _pick_existing_path(Path.cwd() / raw_path, _repo_root() / raw_path)
+    return _pick_existing_path(*fallback_candidates)
+
+
 def _is_git_lfs_pointer(path: Path) -> bool:
     try:
         with path.open("rb") as f:
@@ -40,16 +52,16 @@ def _is_git_lfs_pointer(path: Path) -> bool:
 
 
 def _resolve_model_paths() -> tuple[str, str]:
-    # if settings.cv_occupancy_model_path and settings.cv_seat_model_path:
-    #     return settings.cv_occupancy_model_path, settings.cv_seat_model_path
-
     root = _repo_root()
-    occupancy_model = _pick_existing_path(
+    occupancy_model = _resolve_configured_model_path(
+        settings.cv_occupancy_model_path,
         root / "computer_vision" / "Models" / "person_and_item" / "v2" / "best.pt",
-        root / "computer_vision" / "models" / "person_and_item" / "v2" / "best.pt",
+        root / "computer_vision" / "models" / "mixed" / "model_v3" / "best.pt",
     )
-    seat_model = _pick_existing_path(
-        root / "computer_vision" / "yolo11l.pt"
+    seat_model = _resolve_configured_model_path(
+        settings.cv_seat_model_path,
+        root / "computer_vision" / "model" / "mixed" / "model_v3" / "best.pt",
+        root / "computer_vision" / "yolo11l.pt",
     )
     return str(occupancy_model), str(seat_model)
 
@@ -79,10 +91,17 @@ def get_detector():
     sys.path.insert(0, str(_repo_root()))
     from computer_vision.core.seat_occupancy_detector import SeatOccupancyDetector
 
+    logger.info(
+        "cv detector init occupancy_model=%s seat_model=%s device=%s debug=%s",
+        occupancy_model_path,
+        seat_model_path,
+        settings.cv_device,
+        settings.cv_debug_enabled,
+    )
     return SeatOccupancyDetector(
         occupancy_model_path=occupancy_model_path,
         seat_model_path=seat_model_path,
-        debug_mode=False,
+        debug_mode=settings.cv_debug_enabled,
         device=settings.cv_device,
     )
 
@@ -135,6 +154,17 @@ def estimate_occupancy_from_frame(
     area: str = "",
 ) -> dict:
     detector = get_detector()
+    logger.info(
+        "cv request location=%s area=%s frame_shape=%s frame_dtype=%s conf=%.2f proximity=%.1f cluster=%.1f seat_expand=%.2f",
+        location,
+        area,
+        getattr(frame, "shape", None),
+        getattr(frame, "dtype", None),
+        settings.cv_confidence_threshold,
+        settings.cv_proximity_threshold,
+        settings.cv_item_cluster_threshold,
+        settings.cv_seat_expansion_factor,
+    )
     result = detector.get_occupancy_stats_with_seats(
         frame,
         confidence_threshold=settings.cv_confidence_threshold,
@@ -147,10 +177,11 @@ def estimate_occupancy_from_frame(
         seat_imgsz=settings.cv_seat_imgsz,
         location=location,
         area=area,
-        hogging_item_class_id=list(range(23)),
-        person_class_id=23,
-        seat_class_id=[56,57]
+        hogging_item_class_id=[1,2,3,4,5,9,10],
+        person_class_id=0,
+        seat_class_id=[6,7,8]
     )
+    logger.info("cv response location=%s area=%s stats=%s", location, area, result)
     return result
 
 

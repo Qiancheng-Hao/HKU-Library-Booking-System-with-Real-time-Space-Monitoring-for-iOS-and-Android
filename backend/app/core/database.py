@@ -12,7 +12,7 @@ class Base(DeclarativeBase):
 
 engine = create_engine(
     settings.database_url,
-    echo=settings.debug,
+    echo=settings.db_echo,
     future=True,
     pool_pre_ping=True,
 )

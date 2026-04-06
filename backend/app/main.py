@@ -20,6 +20,16 @@ from app.services.occupancy_cv_service import (
     run_camera_capture_cycle,
 )
 
+
+def _configure_logging() -> None:
+    root_level = logging.DEBUG if settings.debug else logging.INFO
+    logging.basicConfig(level=root_level)
+    if not settings.debug:
+        logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+        logging.getLogger("apscheduler").setLevel(logging.WARNING)
+
+
+_configure_logging()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(

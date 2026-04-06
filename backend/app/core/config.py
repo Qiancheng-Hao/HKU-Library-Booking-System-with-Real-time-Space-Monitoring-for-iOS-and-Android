@@ -1,5 +1,4 @@
 from functools import lru_cache
-from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,6 +22,7 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://postgres:postgres@localhost:5432/hku_library",
         alias="DATABASE_URL",
     )
+    db_echo: bool = Field(default=False, alias="DB_ECHO")
     default_timezone: str = Field(default="Asia/Hong_Kong", alias="DEFAULT_TIMEZONE")
     
     # Reservation settings
@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     
     # Computer Vision settings
     cv_device: str = Field(default="auto", alias="CV_DEVICE")
+    cv_debug_enabled: bool = Field(default=False, alias="CV_DEBUG_ENABLED")
     cv_confidence_threshold: float = Field(default=0.5, alias="CV_CONFIDENCE_THRESHOLD")
     cv_proximity_threshold: float = Field(default=100.0, alias="CV_PROXIMITY_THRESHOLD")
     cv_item_cluster_threshold: float = Field(
@@ -91,15 +92,14 @@ class Settings(BaseSettings):
     )
     cv_imgsz: int = Field(default=640, alias="CV_IMAGE_SIZE")
     cv_seat_imgsz: int = Field(default=640, alias="CV_SEAT_IMAGE_SIZE")
-    # cv_model_paths are determined by service
-    # cv_occupancy_model_path: str | None = Field(
-    #     default=None,
-    #     alias="CV_OCCUPANCY_MODEL_PATH",
-    # )
-    # cv_seat_model_path: str | None = Field(
-    #     default=None,
-    #     alias="CV_SEAT_MODEL_PATH",
-    # )
+    cv_occupancy_model_path: str | None = Field(
+        default=None,
+        alias="CV_OCCUPANCY_MODEL_PATH",
+    )
+    cv_seat_model_path: str | None = Field(
+        default=None,
+        alias="CV_SEAT_MODEL_PATH",
+    )
 
 
 @lru_cache
