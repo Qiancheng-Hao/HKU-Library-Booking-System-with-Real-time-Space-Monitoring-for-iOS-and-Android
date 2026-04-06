@@ -1,5 +1,6 @@
 import inspect
 import json
+import logging
 import uuid
 from typing import Annotated, Optional, Dict, Any, get_type_hints
 from datetime import datetime
@@ -20,6 +21,8 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
+LOGGER = logging.getLogger("ai_agent.booking_agent")
 
 class _Session:
     """Holds the conversation message history for one session."""
@@ -93,9 +96,15 @@ class _SimpleAgent:
         return schemas
 
     async def run(self, message: str, session: _Session) -> _AgentResponse:
+        started_at = time.perf_counter()
+        LOGGER.info(
+            "agent_run_start message_length=%s history_size=%s",
+            len(message),
+            len(session.messages),
+        )
         session.messages.append({"role": "user", "content": message})
 
-        for _ in range(self.MAX_ITERATIONS):
+        for iteration in range(1, self.MAX_ITERATIONS + 1):
             kwargs: dict = {
                 "model": self._model,
                 "messages": session.messages,
@@ -104,7 +113,19 @@ class _SimpleAgent:
                 kwargs["tools"] = self._tool_schemas
                 kwargs["tool_choice"] = "auto"
 
+            llm_started_at = time.perf_counter()
+            LOGGER.info(
+                "agent_llm_request_start iteration=%s model=%s message_count=%s",
+                iteration,
+                self._model,
+                len(session.messages),
+            )
             response = await self._client.chat.completions.create(**kwargs)
+            LOGGER.info(
+                "agent_llm_request_done iteration=%s elapsed_ms=%s",
+                iteration,
+                int((time.perf_counter() - llm_started_at) * 1000),
+            )
             msg = response.choices[0].message
 
             # Add assistant turn to history
@@ -115,22 +136,58 @@ class _SimpleAgent:
 
             # No tool calls → final reply
             if not msg.tool_calls:
+                LOGGER.info(
+                    "agent_run_done iteration=%s elapsed_ms=%s response_length=%s",
+                    iteration,
+                    int((time.perf_counter() - started_at) * 1000),
+                    len(msg.content or ""),
+                )
                 return _AgentResponse(msg.content or "")
 
             # Execute each tool call and append results
+            LOGGER.info(
+                "agent_tool_calls iteration=%s tool_count=%s",
+                iteration,
+                len(msg.tool_calls),
+            )
             for tc in msg.tool_calls:
                 fn = self._tool_funcs.get(tc.function.name)
+                tool_started_at = time.perf_counter()
                 if fn is None:
                     result = f"Unknown tool: {tc.function.name}"
+                    LOGGER.warning(
+                        "agent_tool_unknown iteration=%s tool=%s",
+                        iteration,
+                        tc.function.name,
+                    )
                 else:
                     try:
                         args = json.loads(tc.function.arguments or "{}")
+                        LOGGER.info(
+                            "agent_tool_start iteration=%s tool=%s args=%s",
+                            iteration,
+                            tc.function.name,
+                            args,
+                        )
                         result = fn(**args)
                         if inspect.iscoroutine(result):
                             result = await result
                         result = str(result)
+                        LOGGER.info(
+                            "agent_tool_done iteration=%s tool=%s elapsed_ms=%s result_length=%s",
+                            iteration,
+                            tc.function.name,
+                            int((time.perf_counter() - tool_started_at) * 1000),
+                            len(result),
+                        )
                     except Exception as exc:
                         result = f"Tool error: {exc}"
+                        LOGGER.exception(
+                            "agent_tool_failed iteration=%s tool=%s elapsed_ms=%s",
+                            iteration,
+                            tc.function.name,
+                            int((time.perf_counter() - tool_started_at) * 1000),
+                        )
 
                 session.messages.append({
                     "role": "tool",
@@ -141,7 +198,16 @@ class _SimpleAgent:
         # Exceeded max iterations — return whatever the last assistant message was
         for entry in reversed(session.messages):
             if entry.get("role") == "assistant" and entry.get("content"):
+                LOGGER.warning(
+                    "agent_run_max_iterations elapsed_ms=%s response_length=%s",
+                    int((time.perf_counter() - started_at) * 1000),
+                    len(entry["content"]),
+                )
                 return _AgentResponse(entry["content"])
+        LOGGER.warning(
+            "agent_run_empty_response elapsed_ms=%s",
+            int((time.perf_counter() - started_at) * 1000),
+        )
         return _AgentResponse("")
 
 
@@ -184,6 +250,12 @@ class BookingAgent:
 
     async def initialize_agent(self):
         """Initialize the AI agent with the configured LLM provider and tools."""
+        LOGGER.info(
+            "booking_agent_initialize_start user_id=%s model=%s base_url=%s",
+            self.user_id,
+            self.model_id,
+            self.base_url,
+        )
         client = AsyncOpenAI(
             base_url=self.base_url,
             api_key=self.api_key,
@@ -259,6 +331,11 @@ class BookingAgent:
                 self._execute_booking,
             ],
         )
+        LOGGER.info(
+            "booking_agent_initialize_done user_id=%s tool_count=%s",
+            self.user_id,
+            len(self.agent._tool_funcs),
+        )
 
     def set_user_id(self, user_id: str) -> None:
         """Set the user ID for this agent."""
@@ -266,11 +343,24 @@ class BookingAgent:
 
     def _query_available_facilities(self) -> str:
         """Query currently available facilities based on collected location, type, date and sessions."""
+        started_at = time.perf_counter()
         if not all([self.collected_info["location"], self.collected_info["type"],
                    self.collected_info["date"], self.collected_info["sessions"]]):
+            LOGGER.info(
+                "availability_query_skipped missing_fields=%s",
+                [key for key, value in self.collected_info.items() if value is None],
+            )
             return "Need location, type, date, and sessions to check availability."
 
         try:
+            LOGGER.info(
+                "availability_query_start user_id=%s location=%s type=%s date=%s sessions=%s",
+                self.user_id,
+                self.collected_info["location"],
+                self.collected_info["type"],
+                self.collected_info["date"],
+                self.collected_info["sessions"],
+            )
             dummy_id = self.user_id or uuid.uuid4()
             booking_system = OptimizedBookingSystem(
                 user_id=dummy_id,
@@ -281,6 +371,11 @@ class BookingAgent:
             )
             result = booking_system.get_available_facilities()
             if result["success"]:
+                LOGGER.info(
+                    "availability_query_done elapsed_ms=%s available_session_count=%s",
+                    int((time.perf_counter() - started_at) * 1000),
+                    len(result.get("available_facilities", {})),
+                )
                 diagnostics = result.get("session_diagnostics", {})
                 adjusted_entries = []
                 for session, diag in diagnostics.items():
@@ -327,8 +422,17 @@ class BookingAgent:
                             msg += f"- {display_time}: No rooms available.\n"
                 return msg
             else:
+                LOGGER.warning(
+                    "availability_query_failed elapsed_ms=%s message=%s",
+                    int((time.perf_counter() - started_at) * 1000),
+                    result.get("message", "Unknown error"),
+                )
                 return f"Failed to query availability: {result.get('message', 'Unknown error')}"
         except Exception as e:
+            LOGGER.exception(
+                "availability_query_exception elapsed_ms=%s",
+                int((time.perf_counter() - started_at) * 1000),
+            )
             return f"Error checking availability: {str(e)}"
 
     def _convert_location(self, location_name: Annotated[str, "Library location name in natural language (e.g., 'Chi Wah', 'Main Library')"]) -> str:
@@ -428,6 +532,13 @@ class BookingAgent:
 
     async def chat(self, user_message: str, thread=None) -> str:
         """Process a user message and return the agent's response."""
+        started_at = time.perf_counter()
+        LOGGER.info(
+            "booking_agent_chat_start user_id=%s message_length=%s has_thread=%s",
+            self.user_id,
+            len(user_message),
+            thread is not None,
+        )
         if self.agent is None:
             await self.initialize_agent()
         assert self.agent is not None
@@ -436,6 +547,12 @@ class BookingAgent:
             thread = self.agent.create_session()
 
         response = await self.agent.run(user_message, session=thread)
+        LOGGER.info(
+            "booking_agent_chat_done user_id=%s elapsed_ms=%s response_length=%s",
+            self.user_id,
+            int((time.perf_counter() - started_at) * 1000),
+            len(response.text or ""),
+        )
         return response.text or ""
 
     async def start_conversation(self):
