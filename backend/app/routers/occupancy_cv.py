@@ -1,4 +1,5 @@
 import math
+import re
 from datetime import datetime, time as time_type, timezone
 from zoneinfo import ZoneInfo
 
@@ -48,6 +49,16 @@ def _parse_lat_lon(value: str | None) -> tuple[float, float] | None:
     return lat, lon
 
 
+def _library_coords(lib: Library) -> tuple[float, float] | None:
+    # Prefer dedicated numeric coordinates when available.
+    if lib.latitude is not None and lib.longitude is not None:
+        lat = float(lib.latitude)
+        lon = float(lib.longitude)
+        if -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0:
+            return lat, lon
+    return _parse_lat_lon(lib.location)
+
+
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     r = 6371008.8
     phi1 = math.radians(lat1)
@@ -59,37 +70,54 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return r * c
 
 
-def _parse_opening_hours(value: str | None) -> tuple[time_type, time_type] | None:
+def _parse_opening_hours(value: str | None) -> list[tuple[time_type, time_type]]:
     if not value:
-        return None
+        return []
+
     raw = value.strip()
-    if not raw or "-" not in raw:
-        return None
-    start_s, end_s = [s.strip() for s in raw.split("-", 1)]
-    try:
-        sh, sm = [int(x) for x in start_s.split(":", 1)]
-        eh, em = [int(x) for x in end_s.split(":", 1)]
-    except Exception:
-        return None
-    try:
-        start_t = time_type(hour=sh, minute=sm)
-        end_t = time_type(hour=eh, minute=em)
-    except ValueError:
-        return None
-    return start_t, end_t
+    if not raw:
+        return []
+
+    ranges: list[tuple[time_type, time_type]] = []
+    for start_s, end_s in re.findall(r"(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})", raw):
+        try:
+            sh, sm = [int(x) for x in start_s.split(":", 1)]
+            eh, em = [int(x) for x in end_s.split(":", 1)]
+            start_t = time_type(hour=sh, minute=sm)
+            end_t = time_type(hour=eh, minute=em)
+            ranges.append((start_t, end_t))
+        except Exception:
+            continue
+
+    return ranges
 
 
 def _is_open_at(*, opening_hours: str | None, at: datetime) -> bool:
-    hours = _parse_opening_hours(opening_hours)
-    if hours is None:
+    raw = (opening_hours or "").strip().lower()
+    if not raw:
         return False
-    start_t, end_t = hours
+
+    # Handles strings like "Open 24 hours".
+    if "24" in raw and "hour" in raw:
+        return True
+
+    ranges = _parse_opening_hours(opening_hours)
+    if not ranges:
+        return False
+
     tz = ZoneInfo(settings.default_timezone)
     at_local = at.astimezone(tz)
     now_t = at_local.timetz().replace(tzinfo=None)
-    if start_t <= end_t:
-        return start_t <= now_t <= end_t
-    return now_t >= start_t or now_t <= end_t
+
+    for start_t, end_t in ranges:
+        if start_t <= end_t:
+            if start_t <= now_t <= end_t:
+                return True
+        else:
+            if now_t >= start_t or now_t <= end_t:
+                return True
+
+    return False
 
 
 def _select_best_open_area(
@@ -110,7 +138,7 @@ def _select_best_open_area(
             continue
         if not _is_open_at(opening_hours=lib.opening_hours, at=at):
             continue
-        coords = _parse_lat_lon(lib.location)
+        coords = _library_coords(lib)
         if coords is None:
             continue
         lib_lat, lib_lon = coords
@@ -212,7 +240,7 @@ def _get_realtime_occupancy_impl(
 
     results: list[LibraryOccupancyItem] = []
     for lib in libraries:
-        coords = _parse_lat_lon(lib.location)
+        coords = _library_coords(lib)
         if coords is None:
             continue
         lib_lat, lib_lon = coords
