@@ -57,6 +57,26 @@ class Settings(BaseSettings):
     camera_capture_interval_seconds: int = Field(
         default=3, alias="CAMERA_CAPTURE_INTERVAL_SECONDS"
     )
+    camera_capture_use_rabbitmq: bool = Field(
+        default=False, alias="CAMERA_CAPTURE_USE_RABBITMQ"
+    )
+    rabbitmq_url: str = Field(
+        default="amqp://guest:guest@localhost:5672/%2F",
+        alias="RABBITMQ_URL",
+    )
+    rabbitmq_frame_queue: str = Field(
+        default="occupancy.frames",
+        alias="RABBITMQ_FRAME_QUEUE",
+    )
+    rabbitmq_prefetch_count: int = Field(
+        default=1, alias="RABBITMQ_PREFETCH_COUNT"
+    )
+    rabbitmq_frame_jpeg_quality: int = Field(
+        default=80, alias="RABBITMQ_FRAME_JPEG_QUALITY"
+    )
+    rabbitmq_reconnect_seconds: float = Field(
+        default=3.0, alias="RABBITMQ_RECONNECT_SECONDS"
+    )
     
     # Authentication settings
     secret_key: str = Field(

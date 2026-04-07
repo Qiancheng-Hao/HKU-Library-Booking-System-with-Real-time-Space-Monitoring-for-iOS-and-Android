@@ -19,6 +19,7 @@ from app.services.occupancy_cv_service import (
     compute_and_store_area_snapshots,
     run_camera_capture_cycle,
 )
+from app.services.occupancy_rabbitmq_service import RabbitMQCameraPipeline
 
 
 def _configure_logging() -> None:
@@ -120,7 +121,12 @@ async def start_background_tasks() -> None:
     if settings.occupancy_realtime_enabled:
         app.state.occupancy_realtime_task = asyncio.create_task(_run_occupancy_realtime_loop())
     if settings.camera_capture_enabled:
-        app.state.camera_capture_task = asyncio.create_task(_run_camera_capture_loop())
+        if settings.camera_capture_use_rabbitmq:
+            pipeline = RabbitMQCameraPipeline()
+            pipeline.start()
+            app.state.rabbitmq_camera_pipeline = pipeline
+        else:
+            app.state.camera_capture_task = asyncio.create_task(_run_camera_capture_loop())
 
 
 @app.on_event("shutdown")
@@ -143,6 +149,9 @@ async def stop_background_tasks() -> None:
             await task
         except asyncio.CancelledError:
             pass
+    pipeline = getattr(app.state, "rabbitmq_camera_pipeline", None)
+    if pipeline is not None:
+        await asyncio.to_thread(pipeline.stop)
 
 
 @app.get("/health", tags=["Health"])

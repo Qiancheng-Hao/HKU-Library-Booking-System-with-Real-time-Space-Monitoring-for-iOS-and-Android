@@ -66,6 +66,15 @@ def _resolve_model_paths() -> tuple[str, str]:
     return str(occupancy_model), str(seat_model)
 
 
+def normalize_stream_url(stream_url: str) -> str:
+    normalized = stream_url
+    if normalized.startswith("resp:"):
+        normalized = "rtsp://" + normalized[len("resp:") :]
+    if normalized.startswith("rtsp:") and not normalized.startswith("rtsp://"):
+        normalized = "rtsp://" + normalized[len("rtsp:") :]
+    return normalized
+
+
 @lru_cache(maxsize=1)
 def get_detector():
     os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
@@ -193,8 +202,10 @@ def save_occupancy_log(
     stats: dict,
     source: str | None = None,
     frame_index: int | None = None,
+    captured_at: datetime | None = None,
 ) -> None:
     log_entry = OccupancyLog(
+        captured_at=captured_at or datetime.now(timezone.utc),
         location=location,
         area=area,
         total_people=int(stats.get("total_number_of_person", 0) or 0),
@@ -253,7 +264,7 @@ def aggregate_area_occupancy_from_logs(
     for (location, area), camera_rates in by_area.items():
         if not camera_rates:
             continue
-        combined_rate = sum(r for r, _ in camera_rates) / len(camera_rates)
+        combined_rate = max(0, sum(r for r, _ in camera_rates) / len(camera_rates))
         total_samples = sum(c for _, c in camera_rates)
         aggregates.append(
             {
@@ -289,6 +300,7 @@ def compute_and_store_area_snapshots(*, window_seconds: int) -> int:
 
 def run_camera_capture_cycle() -> int:
     import cv2
+    import concurrent.futures
 
     now = datetime.now(timezone.utc)
     captured = 0
@@ -301,29 +313,23 @@ def run_camera_capture_cycle() -> int:
         if not cameras:
             logger.info("camera capture: no enabled cameras found")
             return 0
-        for camera in cameras:
+            
+        def process_camera(camera) -> tuple[bool, dict | None]:
             stream_url = str(camera.stream_url or "")
-            normalized = stream_url
-            if normalized.startswith("resp:"):
-                normalized = "rtsp://" + normalized[len("resp:") :]
-            if normalized.startswith("rtsp:") and not normalized.startswith("rtsp://"):
-                normalized = "rtsp://" + normalized[len("rtsp:") :]
+            normalized = normalize_stream_url(stream_url)
             logger.info("camera capture: start camera=%s url=%s", camera.name, normalized)
             cap = cv2.VideoCapture(normalized)
             try:
                 if not cap.isOpened():
-                    logger.warning(
-                        "camera capture: open failed camera=%s url=%s", camera.name, normalized
-                    )
-                    continue
+                    logger.warning("camera capture: open failed camera=%s url=%s", camera.name, normalized)
+                    return False, None
                 ok, frame = cap.read()
             finally:
                 cap.release()
+                
             if not ok or frame is None:
-                logger.warning(
-                    "camera capture: read failed camera=%s url=%s", camera.name, normalized
-                )
-                continue
+                logger.warning("camera capture: read failed camera=%s url=%s", camera.name, normalized)
+                return False, None
 
             try:
                 stats = estimate_occupancy_from_frame(
@@ -331,21 +337,38 @@ def run_camera_capture_cycle() -> int:
                     location=camera.location,
                     area=camera.area,
                 )
-                save_occupancy_log(
-                    db,
-                    location=camera.location,
-                    area=camera.area,
-                    stats=stats,
-                    source=camera.name,
-                    frame_index=None,
-                )
-                camera.last_captured_at = now
-                db.add(camera)
-                db.commit()
-                captured += 1
+                return True, stats
             except Exception:
-                db.rollback()
-                logger.exception("camera capture: inference/save failed camera=%s", camera.name)
+                logger.exception("camera capture: inference failed camera=%s", camera.name)
+                return False, None
+
+        # Use ThreadPoolExecutor to process cameras concurrently
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, len(cameras))) as executor:
+            future_to_camera = {executor.submit(process_camera, cam): cam for cam in cameras}
+            
+            for future in concurrent.futures.as_completed(future_to_camera):
+                camera = future_to_camera[future]
+                try:
+                    success, stats = future.result()
+                    if success and stats:
+                        save_occupancy_log(
+                            db,
+                            location=camera.location,
+                            area=camera.area,
+                            stats=stats,
+                            source=camera.name,
+                            frame_index=None,
+                            captured_at=now,
+                        )
+                        camera.last_captured_at = now
+                        db.add(camera)
+                        captured += 1
+                except Exception:
+                    logger.exception("camera capture: processing future failed camera=%s", camera.name)
+
+        if captured > 0:
+            db.commit()
+
     return captured
 
 

@@ -18,6 +18,7 @@ The application entrypoint is [main.py](file:///e:/work/COMP4801/HKU-Library-Boo
 - FastAPI
 - SQLAlchemy
 - PostgreSQL via `psycopg`
+- RabbitMQ via `pika`
 - JWT authentication with `python-jose`
 - APScheduler for periodic background jobs
 - OpenCV, PyTorch, and Ultralytics for occupancy-related CV features
@@ -109,6 +110,7 @@ When the service starts, it can launch several background tasks in addition to t
   - optional
   - reads enabled camera sources from `camera_sources`
   - captures frames, runs CV inference, and stores results into `occupancy_logs`
+  - when RabbitMQ mode is enabled, producer threads keep camera connections open and publish JPEG frames to a queue, while a dedicated consumer performs inference and database writes
 
 ## Configuration Loading
 
@@ -160,12 +162,19 @@ Environment variable names are case-insensitive.
 
 - `CAMERA_CAPTURE_ENABLED` default `false`
 - `CAMERA_CAPTURE_INTERVAL_SECONDS` default `3`
+- `CAMERA_CAPTURE_USE_RABBITMQ` default `false`
+- `RABBITMQ_URL` default `amqp://guest:guest@localhost:5672/%2F`
+- `RABBITMQ_FRAME_QUEUE` default `occupancy.frames`
+- `RABBITMQ_PREFETCH_COUNT` default `1`
+- `RABBITMQ_FRAME_JPEG_QUALITY` default `80`
+- `RABBITMQ_RECONNECT_SECONDS` default `3.0`
 
 Notes:
 
 - each capture writes one row into `occupancy_logs`
 - `video_source` is set to the corresponding camera `name`
 - each camera should provide `name`, `stream_url`, `location`, `area`, and `enabled`
+- when `CAMERA_CAPTURE_USE_RABBITMQ=true`, startup launches long-lived camera publishers and one inference consumer instead of the legacy reconnect-on-every-cycle loop
 
 ### Computer Vision
 
@@ -213,6 +222,12 @@ OCCUPANCY_REALTIME_WINDOW_SECONDS=10
 
 CAMERA_CAPTURE_ENABLED=false
 CAMERA_CAPTURE_INTERVAL_SECONDS=3
+CAMERA_CAPTURE_USE_RABBITMQ=false
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/%2F
+RABBITMQ_FRAME_QUEUE=occupancy.frames
+RABBITMQ_PREFETCH_COUNT=1
+RABBITMQ_FRAME_JPEG_QUALITY=80
+RABBITMQ_RECONNECT_SECONDS=3
 
 CV_DEVICE=auto
 CV_DEBUG_ENABLED=false

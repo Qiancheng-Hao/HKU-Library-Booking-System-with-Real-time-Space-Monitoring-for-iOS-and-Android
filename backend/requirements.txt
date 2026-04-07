@@ -17,3 +17,4 @@ torch
 torchvision
 ultralytics
 apscheduler 
+pika==1.3.2
