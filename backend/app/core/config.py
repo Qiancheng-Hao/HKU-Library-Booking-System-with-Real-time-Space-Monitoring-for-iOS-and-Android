@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     app_name: str = Field(default="HKU Library Booking API", alias="APP_NAME")
     api_version: str = Field(default="v1", alias="API_VERSION")
     debug: bool = Field(default=False, alias="API_DEBUG")
+    log_to_file_enabled: bool = Field(default=True, alias="LOG_TO_FILE_ENABLED")
+    log_file_path: str = Field(default="logs/backend.log", alias="LOG_FILE_PATH")
+    log_file_max_bytes: int = Field(default=10485760, alias="LOG_FILE_MAX_BYTES")
+    log_file_backup_count: int = Field(default=5, alias="LOG_FILE_BACKUP_COUNT")
     database_url: str = Field(
         default="postgresql+psycopg://postgres:postgres@localhost:5432/hku_library",
         alias="DATABASE_URL",
@@ -68,6 +72,10 @@ class Settings(BaseSettings):
         default="occupancy.frames",
         alias="RABBITMQ_FRAME_QUEUE",
     )
+    rabbitmq_stats_queue: str = Field(
+        default="occupancy.stats",
+        alias="RABBITMQ_STATS_QUEUE",
+    )
     rabbitmq_prefetch_count: int = Field(
         default=1, alias="RABBITMQ_PREFETCH_COUNT"
     )
@@ -76,6 +84,49 @@ class Settings(BaseSettings):
     )
     rabbitmq_reconnect_seconds: float = Field(
         default=3.0, alias="RABBITMQ_RECONNECT_SECONDS"
+    )
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        alias="REDIS_URL",
+    )
+    occupancy_cache_enabled: bool = Field(
+        default=True, alias="OCCUPANCY_CACHE_ENABLED"
+    )
+    occupancy_snapshot_cache_ttl_seconds: int = Field(
+        default=60, alias="OCCUPANCY_SNAPSHOT_CACHE_TTL_SECONDS"
+    )
+    occupancy_window_retention_seconds: int = Field(
+        default=120, alias="OCCUPANCY_WINDOW_RETENTION_SECONDS"
+    )
+    occupancy_event_dedupe_ttl_seconds: int = Field(
+        default=86400, alias="OCCUPANCY_EVENT_DEDUPE_TTL_SECONDS"
+    )
+    occupancy_timescale_enabled: bool = Field(
+        default=True, alias="OCCUPANCY_TIMESCALE_ENABLED"
+    )
+    occupancy_timescale_required: bool = Field(
+        default=False, alias="OCCUPANCY_TIMESCALE_REQUIRED"
+    )
+    occupancy_log_chunk_interval: str = Field(
+        default="1 day", alias="OCCUPANCY_LOG_CHUNK_INTERVAL"
+    )
+    occupancy_snapshot_chunk_interval: str = Field(
+        default="7 days", alias="OCCUPANCY_SNAPSHOT_CHUNK_INTERVAL"
+    )
+    occupancy_log_retention_days: int = Field(
+        default=14, alias="OCCUPANCY_LOG_RETENTION_DAYS"
+    )
+    occupancy_snapshot_retention_days: int = Field(
+        default=180, alias="OCCUPANCY_SNAPSHOT_RETENTION_DAYS"
+    )
+    occupancy_log_compression_after_days: int = Field(
+        default=2, alias="OCCUPANCY_LOG_COMPRESSION_AFTER_DAYS"
+    )
+    occupancy_snapshot_compression_after_days: int = Field(
+        default=7, alias="OCCUPANCY_SNAPSHOT_COMPRESSION_AFTER_DAYS"
+    )
+    occupancy_rollup_enabled: bool = Field(
+        default=True, alias="OCCUPANCY_ROLLUP_ENABLED"
     )
     
     # Authentication settings

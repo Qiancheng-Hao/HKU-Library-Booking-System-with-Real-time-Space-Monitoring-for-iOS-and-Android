@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import threading
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -13,7 +14,9 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.occupancy import CameraSource
+from app.services.occupancy_cache_service import add_stats_event_to_window
 from app.services.occupancy_cv_service import (
+    build_occupancy_stats_event,
     decode_image_bytes,
     estimate_occupancy_from_frame,
     normalize_stream_url,
@@ -73,6 +76,7 @@ def _sleep(stop_event: threading.Event, seconds: float) -> None:
 
 def _build_message(camera: CameraStreamConfig, frame_bytes: bytes, captured_at: datetime) -> bytes:
     payload = {
+        "event_id": str(uuid.uuid4()),
         "camera_name": camera.name,
         "location": camera.location,
         "area": camera.area,
@@ -87,6 +91,16 @@ def _parse_message(body: bytes) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("Invalid RabbitMQ frame payload.")
     return payload
+
+
+def _read_event_id(payload: dict[str, Any]) -> uuid.UUID:
+    raw_value = payload.get("event_id")
+    if raw_value is None:
+        return uuid.uuid4()
+    try:
+        return uuid.UUID(str(raw_value))
+    except (ValueError, TypeError):
+        return uuid.uuid4()
 
 
 class CameraFramePublisher(threading.Thread):
@@ -202,8 +216,108 @@ class CameraFramePublisher(threading.Thread):
 
 
 class OccupancyInferenceConsumer(threading.Thread):
-    def __init__(self, *, queue_name: str, stop_event: threading.Event) -> None:
+    def __init__(
+        self,
+        *,
+        queue_name: str,
+        stats_queue_name: str,
+        stop_event: threading.Event,
+    ) -> None:
         super().__init__(name="occupancy-inference-consumer", daemon=True)
+        self.queue_name = queue_name
+        self.stats_queue_name = stats_queue_name
+        self.stop_event = stop_event
+
+    def run(self) -> None:
+        pika, AMQPConnectionError = _import_pika()
+
+        while not self.stop_event.is_set():
+            connection = None
+            channel = None
+            iterator = None
+            try:
+                connection = pika.BlockingConnection(
+                    pika.URLParameters(settings.rabbitmq_url)
+                )
+                channel = connection.channel()
+                channel.queue_declare(queue=self.queue_name, durable=True)
+                channel.queue_declare(queue=self.stats_queue_name, durable=True)
+                channel.basic_qos(
+                    prefetch_count=max(1, int(settings.rabbitmq_prefetch_count))
+                )
+                iterator = channel.consume(
+                    queue=self.queue_name,
+                    inactivity_timeout=1,
+                    auto_ack=False,
+                )
+
+                for method_frame, _, body in iterator:
+                    if self.stop_event.is_set():
+                        break
+                    if method_frame is None or body is None:
+                        continue
+
+                    try:
+                        payload = _parse_message(body)
+                        event_id = _read_event_id(payload)
+                        captured_at = datetime.fromisoformat(str(payload["captured_at"]))
+                        if captured_at.tzinfo is None:
+                            captured_at = captured_at.replace(tzinfo=timezone.utc)
+                        frame = decode_image_bytes(base64.b64decode(str(payload["image_base64"])))
+                        stats = estimate_occupancy_from_frame(
+                            frame=frame,
+                            location=str(payload["location"]),
+                            area=str(payload["area"]),
+                        )
+                        stats_message = {
+                            "event_id": str(event_id),
+                            "camera_name": str(payload["camera_name"]),
+                            "location": str(payload["location"]),
+                            "area": str(payload["area"]),
+                            "captured_at": captured_at.isoformat(),
+                            "stats": {
+                                "total_number_of_person": int(stats.get("total_number_of_person", 0) or 0),
+                                "total_number_of_hogging_items": int(stats.get("total_number_of_hogging_items", 0) or 0),
+                                "total_number_of_seats": int(stats.get("total_number_of_seats", 0) or 0),
+                                "occupancy_rate": float(stats.get("occupancy_rate", -1.0) or -1.0),
+                            },
+                        }
+                        channel.basic_publish(
+                            exchange="",
+                            routing_key=self.stats_queue_name,
+                            body=json.dumps(stats_message).encode("utf-8"),
+                            properties=pika.BasicProperties(
+                                delivery_mode=2,
+                                content_type="application/json",
+                            ),
+                        )
+                        channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+                    except Exception:
+                        logger.exception("rabbitmq inference consumer processing failed")
+                        channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=False)
+            except AMQPConnectionError:
+                logger.exception("rabbitmq inference consumer connection failed")
+                _sleep(self.stop_event, settings.rabbitmq_reconnect_seconds)
+            except Exception:
+                logger.exception("rabbitmq inference consumer loop failed")
+                _sleep(self.stop_event, settings.rabbitmq_reconnect_seconds)
+            finally:
+                if iterator is not None:
+                    try:
+                        iterator.close()
+                    except Exception:
+                        pass
+                if channel is not None and getattr(channel, "is_open", False):
+                    try:
+                        channel.cancel()
+                    except Exception:
+                        pass
+                _close_quietly(connection)
+
+
+class OccupancyStatsConsumer(threading.Thread):
+    def __init__(self, *, queue_name: str, stop_event: threading.Event) -> None:
+        super().__init__(name="occupancy-stats-consumer", daemon=True)
         self.queue_name = queue_name
         self.stop_event = stop_event
 
@@ -229,75 +343,65 @@ class OccupancyInferenceConsumer(threading.Thread):
                     auto_ack=False,
                 )
 
-                messages_buffer = []
-                last_flush_time = datetime.now()
-                batch_size = 5
-                flush_interval_seconds = 2.0
-
                 for method_frame, _, body in iterator:
                     if self.stop_event.is_set():
                         break
-                        
-                    if method_frame is not None:
-                        messages_buffer.append((method_frame, body))
-                        
-                    now = datetime.now()
-                    if len(messages_buffer) >= batch_size or (messages_buffer and (now - last_flush_time).total_seconds() >= flush_interval_seconds):
-                        try:
-                            with SessionLocal() as db:
-                                for mf, b in messages_buffer:
-                                    payload = _parse_message(b)
-                                    captured_at = datetime.fromisoformat(str(payload["captured_at"]))
-                                    if captured_at.tzinfo is None:
-                                        captured_at = captured_at.replace(tzinfo=timezone.utc)
+                    if method_frame is None or body is None:
+                        continue
 
-                                    frame = decode_image_bytes(base64.b64decode(str(payload["image_base64"])))
-                                    stats = estimate_occupancy_from_frame(
-                                        frame=frame,
-                                        location=str(payload["location"]),
-                                        area=str(payload["area"]),
+                    try:
+                        payload = _parse_message(body)
+                        captured_at = datetime.fromisoformat(str(payload["captured_at"]))
+                        if captured_at.tzinfo is None:
+                            captured_at = captured_at.replace(tzinfo=timezone.utc)
+                        stats = dict(payload["stats"])
+                        event_id = _read_event_id(payload)
+                        camera_name = str(payload["camera_name"])
+
+                        with SessionLocal() as db:
+                            save_occupancy_log(
+                                db,
+                                location=str(payload["location"]),
+                                area=str(payload["area"]),
+                                stats=stats,
+                                source=camera_name,
+                                frame_index=None,
+                                captured_at=captured_at,
+                                event_id=event_id,
+                                camera_name=camera_name,
+                            )
+                            camera = (
+                                db.execute(
+                                    select(CameraSource).where(
+                                        CameraSource.name == camera_name
                                     )
+                                )
+                                .scalars()
+                                .first()
+                            )
+                            if camera is not None:
+                                camera.last_captured_at = captured_at
+                                db.add(camera)
+                            db.commit()
 
-                                    save_occupancy_log(
-                                        db,
-                                        location=str(payload["location"]),
-                                        area=str(payload["area"]),
-                                        stats=stats,
-                                        source=str(payload["camera_name"]),
-                                        frame_index=None,
-                                        captured_at=captured_at,
-                                    )
-                                    camera = (
-                                        db.execute(
-                                            select(CameraSource).where(
-                                                CameraSource.name == str(payload["camera_name"])
-                                            )
-                                        )
-                                        .scalars()
-                                        .first()
-                                    )
-                                    if camera is not None:
-                                        camera.last_captured_at = captured_at
-                                        db.add(camera)
-                                db.commit()
-
-                            # 批量 ack
-                            for mf, _ in messages_buffer:
-                                channel.basic_ack(delivery_tag=mf.delivery_tag)
-
-                        except Exception:
-                            logger.exception("rabbitmq inference consumer batch processing failed")
-                            # 批量 nack，并丢弃这批（或者选择 requeue）
-                            for mf, _ in messages_buffer:
-                                channel.basic_nack(delivery_tag=mf.delivery_tag, requeue=False)
-                        finally:
-                            messages_buffer.clear()
-                            last_flush_time = datetime.now()
+                        event = build_occupancy_stats_event(
+                            location=str(payload["location"]),
+                            area=str(payload["area"]),
+                            stats=stats,
+                            camera_name=camera_name,
+                            captured_at=captured_at,
+                            event_id=event_id,
+                        )
+                        add_stats_event_to_window(event)
+                        channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+                    except Exception:
+                        logger.exception("rabbitmq stats consumer processing failed")
+                        channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=False)
             except AMQPConnectionError:
-                logger.exception("rabbitmq inference consumer connection failed")
+                logger.exception("rabbitmq stats consumer connection failed")
                 _sleep(self.stop_event, settings.rabbitmq_reconnect_seconds)
             except Exception:
-                logger.exception("rabbitmq inference consumer loop failed")
+                logger.exception("rabbitmq stats consumer loop failed")
                 _sleep(self.stop_event, settings.rabbitmq_reconnect_seconds)
             finally:
                 if iterator is not None:
@@ -317,14 +421,20 @@ class RabbitMQCameraPipeline:
     def __init__(self) -> None:
         self.stop_event = threading.Event()
         self.publishers: list[CameraFramePublisher] = []
-        self.consumer = OccupancyInferenceConsumer(
+        self.inference_consumer = OccupancyInferenceConsumer(
             queue_name=settings.rabbitmq_frame_queue,
+            stats_queue_name=settings.rabbitmq_stats_queue,
+            stop_event=self.stop_event,
+        )
+        self.stats_consumer = OccupancyStatsConsumer(
+            queue_name=settings.rabbitmq_stats_queue,
             stop_event=self.stop_event,
         )
 
     def start(self) -> None:
         cameras = _load_enabled_cameras()
-        self.consumer.start()
+        self.inference_consumer.start()
+        self.stats_consumer.start()
         self.publishers = [
             CameraFramePublisher(
                 camera=camera,
@@ -345,4 +455,5 @@ class RabbitMQCameraPipeline:
         self.stop_event.set()
         for publisher in self.publishers:
             publisher.join(timeout=5)
-        self.consumer.join(timeout=5)
+        self.inference_consumer.join(timeout=5)
+        self.stats_consumer.join(timeout=5)

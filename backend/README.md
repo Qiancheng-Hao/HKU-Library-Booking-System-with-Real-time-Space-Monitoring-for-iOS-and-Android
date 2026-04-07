@@ -17,7 +17,8 @@ The application entrypoint is [main.py](file:///e:/work/COMP4801/HKU-Library-Boo
 
 - FastAPI
 - SQLAlchemy
-- PostgreSQL via `psycopg`
+- PostgreSQL / TimescaleDB via `psycopg`
+- Redis
 - RabbitMQ via `pika`
 - JWT authentication with `python-jose`
 - APScheduler for periodic background jobs
@@ -46,6 +47,11 @@ After startup:
 
 - The backend uses `DATABASE_URL` to connect to PostgreSQL.
 - On startup, `Base.metadata.create_all(...)` creates tables defined by the current SQLAlchemy models.
+- When `OCCUPANCY_TIMESCALE_ENABLED=true`, startup also attempts to:
+  - enable TimescaleDB extension
+  - convert occupancy tables to hypertables
+  - apply retention and compression policies
+  - create continuous aggregate rollup (optional)
 - Seed data for libraries, facility types, aliases, and facilities is provided in [seed_library_facility_data.sql](file:///e:/work/COMP4801/HKU-Library-Booking-System-with-Real-time-Space-Monitoring-for-iOS-and-Android-1/backend/seed_library_facility_data.sql).
 
 Typical local flow:
@@ -104,13 +110,17 @@ When the service starts, it can launch several background tasks in addition to t
   - calls `update_expired_reservations`
 - occupancy aggregation loop
   - optional
-  - reads from `occupancy_logs`
-  - writes area-level snapshots into `occupancy_area_snapshots`
+  - computes area-level snapshots every `OCCUPANCY_REALTIME_REFRESH_SECONDS`
+  - prefers Redis sliding windows when cache is enabled
+  - falls back to DB window aggregation when Redis is unavailable
+  - writes snapshots into `occupancy_area_snapshots`
 - camera capture loop
   - optional
   - reads enabled camera sources from `camera_sources`
   - captures frames, runs CV inference, and stores results into `occupancy_logs`
-  - when RabbitMQ mode is enabled, producer threads keep camera connections open and publish JPEG frames to a queue, while a dedicated consumer performs inference and database writes
+  - when RabbitMQ mode is enabled, producer threads keep camera connections open and publish JPEG frames to `occupancy.frames`
+  - inference consumer reads frames, runs CV, and publishes normalized stats events to `occupancy.stats`
+  - stats consumer persists logs, updates camera heartbeat, and updates Redis event windows
 
 ## Configuration Loading
 
@@ -129,6 +139,10 @@ Environment variable names are case-insensitive.
 - `APP_NAME` default `HKU Library Booking API`
 - `API_VERSION` default `v1`
 - `API_DEBUG` default `false`
+- `LOG_TO_FILE_ENABLED` default `true`
+- `LOG_FILE_PATH` default `logs/backend.log`
+- `LOG_FILE_MAX_BYTES` default `10485760`
+- `LOG_FILE_BACKUP_COUNT` default `5`
 - `DATABASE_URL` default `postgresql+psycopg://postgres:postgres@localhost:5432/hku_library`
 - `DB_ECHO` default `false`
 - `DEFAULT_TIMEZONE` default `Asia/Hong_Kong`
@@ -157,6 +171,20 @@ Environment variable names are case-insensitive.
 - `OCCUPANCY_REALTIME_ENABLED` default `true`
 - `OCCUPANCY_REALTIME_REFRESH_SECONDS` default `10`
 - `OCCUPANCY_REALTIME_WINDOW_SECONDS` default `10`
+- `OCCUPANCY_CACHE_ENABLED` default `true`
+- `OCCUPANCY_SNAPSHOT_CACHE_TTL_SECONDS` default `60`
+- `OCCUPANCY_WINDOW_RETENTION_SECONDS` default `120`
+- `OCCUPANCY_EVENT_DEDUPE_TTL_SECONDS` default `86400`
+- `OCCUPANCY_TIMESCALE_ENABLED` default `true`
+- `OCCUPANCY_TIMESCALE_REQUIRED` default `false`
+- `OCCUPANCY_LOG_CHUNK_INTERVAL` default `1 day`
+- `OCCUPANCY_SNAPSHOT_CHUNK_INTERVAL` default `7 days`
+- `OCCUPANCY_LOG_RETENTION_DAYS` default `14`
+- `OCCUPANCY_SNAPSHOT_RETENTION_DAYS` default `180`
+- `OCCUPANCY_LOG_COMPRESSION_AFTER_DAYS` default `2`
+- `OCCUPANCY_SNAPSHOT_COMPRESSION_AFTER_DAYS` default `7`
+- `OCCUPANCY_ROLLUP_ENABLED` default `true`
+- `REDIS_URL` default `redis://localhost:6379/0`
 
 ### Camera Capture
 
@@ -165,6 +193,7 @@ Environment variable names are case-insensitive.
 - `CAMERA_CAPTURE_USE_RABBITMQ` default `false`
 - `RABBITMQ_URL` default `amqp://guest:guest@localhost:5672/%2F`
 - `RABBITMQ_FRAME_QUEUE` default `occupancy.frames`
+- `RABBITMQ_STATS_QUEUE` default `occupancy.stats`
 - `RABBITMQ_PREFETCH_COUNT` default `1`
 - `RABBITMQ_FRAME_JPEG_QUALITY` default `80`
 - `RABBITMQ_RECONNECT_SECONDS` default `3.0`
@@ -174,7 +203,7 @@ Notes:
 - each capture writes one row into `occupancy_logs`
 - `video_source` is set to the corresponding camera `name`
 - each camera should provide `name`, `stream_url`, `location`, `area`, and `enabled`
-- when `CAMERA_CAPTURE_USE_RABBITMQ=true`, startup launches long-lived camera publishers and one inference consumer instead of the legacy reconnect-on-every-cycle loop
+- when `CAMERA_CAPTURE_USE_RABBITMQ=true`, startup launches long-lived camera publishers, one inference consumer, and one stats consumer
 
 ### Computer Vision
 
@@ -210,6 +239,11 @@ SECRET_KEY=change-me
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 
+LOG_TO_FILE_ENABLED=true
+LOG_FILE_PATH=logs/backend.log
+LOG_FILE_MAX_BYTES=10485760
+LOG_FILE_BACKUP_COUNT=5
+
 AI_AGENT_ENABLED=true
 AI_AGENT_BASE_URL=http://127.0.0.1:8001
 AI_AGENT_TIMEOUT_SECONDS=10
@@ -219,12 +253,27 @@ AI_SESSION_TIMEOUT_MINUTES=30
 OCCUPANCY_REALTIME_ENABLED=true
 OCCUPANCY_REALTIME_REFRESH_SECONDS=10
 OCCUPANCY_REALTIME_WINDOW_SECONDS=10
+OCCUPANCY_CACHE_ENABLED=true
+OCCUPANCY_SNAPSHOT_CACHE_TTL_SECONDS=60
+OCCUPANCY_WINDOW_RETENTION_SECONDS=120
+OCCUPANCY_EVENT_DEDUPE_TTL_SECONDS=86400
+OCCUPANCY_TIMESCALE_ENABLED=true
+OCCUPANCY_TIMESCALE_REQUIRED=false
+OCCUPANCY_LOG_CHUNK_INTERVAL=1 day
+OCCUPANCY_SNAPSHOT_CHUNK_INTERVAL=7 days
+OCCUPANCY_LOG_RETENTION_DAYS=14
+OCCUPANCY_SNAPSHOT_RETENTION_DAYS=180
+OCCUPANCY_LOG_COMPRESSION_AFTER_DAYS=2
+OCCUPANCY_SNAPSHOT_COMPRESSION_AFTER_DAYS=7
+OCCUPANCY_ROLLUP_ENABLED=true
+REDIS_URL=redis://localhost:6379/0
 
 CAMERA_CAPTURE_ENABLED=false
 CAMERA_CAPTURE_INTERVAL_SECONDS=3
 CAMERA_CAPTURE_USE_RABBITMQ=false
 RABBITMQ_URL=amqp://guest:guest@localhost:5672/%2F
 RABBITMQ_FRAME_QUEUE=occupancy.frames
+RABBITMQ_STATS_QUEUE=occupancy.stats
 RABBITMQ_PREFETCH_COUNT=1
 RABBITMQ_FRAME_JPEG_QUALITY=80
 RABBITMQ_RECONNECT_SECONDS=3
@@ -247,3 +296,4 @@ CV_SEAT_MODEL_PATH=../computer_vision/model/mixed/model_v3/best.pt
 - The backend automatically exposes OpenAPI docs through FastAPI.
 - AI endpoints depend on the upstream AI agent being reachable at `AI_AGENT_BASE_URL`.
 - Occupancy endpoints can run without camera capture enabled, but they are only useful when occupancy snapshot data already exists.
+- `/health` now includes dependency checks for RabbitMQ, Redis, and TimescaleDB initialization/runtime state.

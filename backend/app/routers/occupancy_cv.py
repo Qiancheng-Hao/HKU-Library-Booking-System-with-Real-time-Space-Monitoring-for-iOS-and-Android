@@ -20,6 +20,7 @@ from app.schemas.occupancy_cv import (
     RealtimeOccupancyRequest,
     RealtimeOccupancyResponse,
 )
+from app.services.occupancy_cache_service import get_all_latest_snapshots
 # from app.services.occupancy_cv_service import (
 #     aggregate_area_occupancy_from_logs,
 #     estimate_occupancy_from_image_bytes,
@@ -157,6 +158,57 @@ def _select_best_open_area(
     return candidates[0]
 
 
+def _snapshot_from_cache(location: str, area: str, occupancy_rate: float, sample_count: int, window_seconds: int, measured_at: datetime) -> AreaOccupancySnapshot:
+    return AreaOccupancySnapshot(
+        location=location,
+        area=area,
+        occupancy_rate=occupancy_rate,
+        sample_count=sample_count,
+        window_seconds=window_seconds,
+        measured_at=measured_at,
+    )
+
+
+def _load_latest_snapshots(db: Session, *, target_time: datetime, prefer_cache: bool) -> list[AreaOccupancySnapshot]:
+    if prefer_cache:
+        cached = get_all_latest_snapshots()
+        if cached:
+            return [
+                _snapshot_from_cache(
+                    location=item.location,
+                    area=item.area,
+                    occupancy_rate=item.occupancy_rate,
+                    sample_count=item.sample_count,
+                    window_seconds=item.window_seconds,
+                    measured_at=item.measured_at,
+                )
+                for item in cached
+            ]
+
+    latest_subq = (
+        select(
+            AreaOccupancySnapshot.location.label("location"),
+            AreaOccupancySnapshot.area.label("area"),
+            func.max(AreaOccupancySnapshot.measured_at).label("measured_at"),
+        )
+        .where(AreaOccupancySnapshot.measured_at <= target_time)
+        .group_by(AreaOccupancySnapshot.location, AreaOccupancySnapshot.area)
+        .subquery()
+    )
+
+    snapshot_stmt = (
+        select(AreaOccupancySnapshot)
+        .join(
+            latest_subq,
+            (AreaOccupancySnapshot.location == latest_subq.c.location)
+            & (AreaOccupancySnapshot.area == latest_subq.c.area)
+            & (AreaOccupancySnapshot.measured_at == latest_subq.c.measured_at),
+        )
+        .order_by(AreaOccupancySnapshot.location.asc(), AreaOccupancySnapshot.area.asc())
+    )
+    return db.execute(snapshot_stmt).scalars().all()
+
+
 router = APIRouter(prefix="/occupancy", tags=["Occupancy"])
 
 # not used for users
@@ -208,29 +260,11 @@ def _get_realtime_occupancy_impl(
     at = req.time or datetime.now(timezone.utc)
 
     libraries = db.execute(select(Library).order_by(Library.name.asc())).scalars().all()
-
-    target_time = at
-    latest_subq = (
-        select(
-            AreaOccupancySnapshot.location.label("location"),
-            AreaOccupancySnapshot.area.label("area"),
-            func.max(AreaOccupancySnapshot.measured_at).label("measured_at"),
-        )
-        .where(AreaOccupancySnapshot.measured_at <= target_time)
-        .group_by(AreaOccupancySnapshot.location, AreaOccupancySnapshot.area)
-        .subquery()
+    snapshots = _load_latest_snapshots(
+        db,
+        target_time=at,
+        prefer_cache=req.time is None,
     )
-
-    snapshot_stmt = (
-        select(AreaOccupancySnapshot)
-        .join(
-            latest_subq,
-            (AreaOccupancySnapshot.location == latest_subq.c.location)
-            & (AreaOccupancySnapshot.area == latest_subq.c.area)
-            & (AreaOccupancySnapshot.measured_at == latest_subq.c.measured_at),
-        )
-    )
-    snapshots = db.execute(snapshot_stmt).scalars().all()
 
     by_location: dict[str, list[AreaOccupancySnapshot]] = {}
     for row in snapshots:
@@ -312,29 +346,7 @@ def get_occupancy_recommendation(
     at = datetime.now(timezone.utc)
 
     libraries = db.execute(select(Library).order_by(Library.name.asc())).scalars().all()
-
-    latest_subq = (
-        select(
-            AreaOccupancySnapshot.location.label("location"),
-            AreaOccupancySnapshot.area.label("area"),
-            func.max(AreaOccupancySnapshot.measured_at).label("measured_at"),
-        )
-        .where(AreaOccupancySnapshot.measured_at <= at)
-        .group_by(AreaOccupancySnapshot.location, AreaOccupancySnapshot.area)
-        .subquery()
-    )
-
-    snapshot_stmt = (
-        select(AreaOccupancySnapshot)
-        .join(
-            latest_subq,
-            (AreaOccupancySnapshot.location == latest_subq.c.location)
-            & (AreaOccupancySnapshot.area == latest_subq.c.area)
-            & (AreaOccupancySnapshot.measured_at == latest_subq.c.measured_at),
-        )
-        .order_by(AreaOccupancySnapshot.location.asc(), AreaOccupancySnapshot.area.asc())
-    )
-    snapshots = db.execute(snapshot_stmt).scalars().all()
+    snapshots = _load_latest_snapshots(db, target_time=at, prefer_cache=True)
 
     selected = _select_best_open_area(req, libraries=libraries, snapshots=snapshots, at=at)
     if selected is None:

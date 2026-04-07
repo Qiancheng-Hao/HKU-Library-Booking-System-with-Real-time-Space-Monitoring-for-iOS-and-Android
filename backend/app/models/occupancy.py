@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
@@ -15,7 +15,14 @@ class OccupancyLog(Base):
     """Logs detailed occupancy results for each analyzed frame/image."""
 
     __tablename__ = "occupancy_logs"
-    __table_args__ = {"comment": "Detailed log of CV analysis results per frame."}
+    __table_args__ = (
+        UniqueConstraint(
+            "captured_at",
+            "event_id",
+            name="uq_occupancy_logs_captured_event",
+        ),
+        {"comment": "Detailed log of CV analysis results per frame."},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -27,8 +34,15 @@ class OccupancyLog(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
+        primary_key=True,
         index=True,
         comment="When this frame/image was processed.",
+    )
+    event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True,
+        comment="Idempotency key for the processed detection event.",
     )
     location: Mapped[str] = mapped_column(
         String, nullable=True, comment="Library or building name."
@@ -50,6 +64,9 @@ class OccupancyLog(Base):
     )
     video_source: Mapped[str] = mapped_column(
         String, nullable=True, comment="Source video filename if applicable."
+    )
+    camera_name: Mapped[str | None] = mapped_column(
+        String, nullable=True, index=True, comment="Logical camera identifier."
     )
     frame_index: Mapped[int] = mapped_column(
         Integer, nullable=True, comment="Frame index if from video."
@@ -180,7 +197,16 @@ class OccupancyPeriod(str, enum.Enum):
 
 class AreaOccupancySnapshot(Base):
     __tablename__ = "occupancy_area_snapshots"
-    __table_args__ = {"comment": "Near-real-time occupancy snapshots per location+area."}
+    __table_args__ = (
+        UniqueConstraint(
+            "location",
+            "area",
+            "measured_at",
+            "window_seconds",
+            name="uq_occupancy_area_snapshot_window",
+        ),
+        {"comment": "Near-real-time occupancy snapshots per location+area."},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -213,6 +239,7 @@ class AreaOccupancySnapshot(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
+        primary_key=True,
         index=True,
         comment="Timestamp when the snapshot was generated.",
     )

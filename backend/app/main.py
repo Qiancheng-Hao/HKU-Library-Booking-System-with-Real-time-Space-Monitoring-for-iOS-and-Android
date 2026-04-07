@@ -1,5 +1,8 @@
 import asyncio
 import logging
+from datetime import datetime, timezone
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,11 +23,41 @@ from app.services.occupancy_cv_service import (
     run_camera_capture_cycle,
 )
 from app.services.occupancy_rabbitmq_service import RabbitMQCameraPipeline
+from app.services.occupancy_cache_service import get_redis_client
+from app.services.occupancy_storage_service import (
+    get_occupancy_storage_status,
+    initialize_occupancy_storage,
+)
 
 
 def _configure_logging() -> None:
     root_level = logging.DEBUG if settings.debug else logging.INFO
-    logging.basicConfig(level=root_level)
+    formatter = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    )
+    logging.basicConfig(level=root_level, format=formatter._fmt)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(root_level)
+
+    if settings.log_to_file_enabled:
+        log_path = Path(settings.log_file_path)
+        if not log_path.is_absolute():
+            log_path = Path.cwd() / log_path
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = RotatingFileHandler(
+            filename=str(log_path),
+            maxBytes=max(1024, int(settings.log_file_max_bytes)),
+            backupCount=max(1, int(settings.log_file_backup_count)),
+            encoding="utf-8",
+        )
+        file_handler.setLevel(root_level)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+        for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+            named_logger = logging.getLogger(logger_name)
+            named_logger.setLevel(root_level)
+            named_logger.addHandler(file_handler)
+
     if not settings.debug:
         logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
         logging.getLogger("apscheduler").setLevel(logging.WARNING)
@@ -40,6 +73,51 @@ app = FastAPI(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _rabbitmq_health_status() -> dict[str, object]:
+    status: dict[str, object] = {
+        "enabled": bool(settings.camera_capture_use_rabbitmq),
+        "queue_frame": settings.rabbitmq_frame_queue,
+        "queue_stats": settings.rabbitmq_stats_queue,
+        "ok": False,
+    }
+    try:
+        import pika
+    except Exception as exc:
+        status["error"] = f"pika unavailable: {exc}"
+        return status
+
+    try:
+        params = pika.URLParameters(settings.rabbitmq_url)
+        params.socket_timeout = 2
+        params.connection_attempts = 1
+        params.retry_delay = 0
+        connection = pika.BlockingConnection(params)
+        channel = connection.channel()
+        channel.queue_declare(queue=settings.rabbitmq_frame_queue, durable=True)
+        channel.queue_declare(queue=settings.rabbitmq_stats_queue, durable=True)
+        connection.close()
+        status["ok"] = True
+        return status
+    except Exception as exc:
+        status["error"] = str(exc)
+        return status
+
+
+def _redis_health_status() -> dict[str, object]:
+    status: dict[str, object] = {
+        "enabled": bool(settings.occupancy_cache_enabled),
+        "ok": False,
+        "url": settings.redis_url,
+    }
+    try:
+        client = get_redis_client()
+        pong = client.ping()
+        status["ok"] = bool(pong)
+    except Exception as exc:
+        status["error"] = str(exc)
+    return status
 
 class TokenAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -113,6 +191,8 @@ async def _run_camera_capture_loop() -> None:
 
 @app.on_event("startup")
 async def start_background_tasks() -> None:
+    app.state.occupancy_storage_init = initialize_occupancy_storage()
+
     scheduler = BackgroundScheduler()
     scheduler.add_job(update_expired_reservations, 'cron', minute='0,15,30,45')
     scheduler.start()
@@ -156,4 +236,15 @@ async def stop_background_tasks() -> None:
 
 @app.get("/health", tags=["Health"])
 def health_check():
-    return {"status": "ok", "app": settings.app_name}
+    checks = {
+        "rabbitmq": _rabbitmq_health_status(),
+        "redis": _redis_health_status(),
+        "timescaledb": get_occupancy_storage_status(),
+    }
+    all_ok = all(bool(item.get("ok", True)) for item in checks.values())
+    return {
+        "status": "ok" if all_ok else "degraded",
+        "app": settings.app_name,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "checks": checks,
+    }

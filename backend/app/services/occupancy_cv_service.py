@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -11,13 +12,37 @@ from pathlib import Path
 import numpy as np
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.occupancy import AreaOccupancySnapshot, CameraSource, OccupancyLog
+from app.services.occupancy_cache_service import (
+    CachedAreaSnapshot,
+    OccupancyStatsEvent,
+    add_stats_event_to_window,
+    cache_enabled,
+    get_active_areas,
+    get_window_events,
+    store_latest_snapshot,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _bucket_datetime(value: datetime, window_seconds: int) -> datetime:
+    normalized = _ensure_utc(value)
+    bucket_seconds = max(1, int(window_seconds))
+    timestamp = int(normalized.timestamp())
+    bucket_timestamp = timestamp - (timestamp % bucket_seconds)
+    return datetime.fromtimestamp(bucket_timestamp, tz=timezone.utc)
 
 
 def _repo_root() -> Path:
@@ -203,19 +228,110 @@ def save_occupancy_log(
     source: str | None = None,
     frame_index: int | None = None,
     captured_at: datetime | None = None,
-) -> None:
-    log_entry = OccupancyLog(
-        captured_at=captured_at or datetime.now(timezone.utc),
+    event_id: uuid.UUID | None = None,
+    camera_name: str | None = None,
+) -> uuid.UUID:
+    captured_value = _ensure_utc(captured_at or datetime.now(timezone.utc))
+    event_uuid = event_id or uuid.uuid4()
+    values = {
+        "id": uuid.uuid4(),
+        "captured_at": captured_value,
+        "event_id": event_uuid,
+        "location": location,
+        "area": area,
+        "total_people": int(stats.get("total_number_of_person", 0) or 0),
+        "total_hogging": int(stats.get("total_number_of_hogging_items", 0) or 0),
+        "total_seats": int(stats.get("total_number_of_seats", 0) or 0),
+        "occupancy_rate": float(stats.get("occupancy_rate", -1.0) or -1.0),
+        "video_source": source,
+        "camera_name": camera_name or source,
+        "frame_index": frame_index,
+    }
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        stmt = postgresql_insert(OccupancyLog).values(**values)
+        stmt = stmt.on_conflict_do_nothing(index_elements=["captured_at", "event_id"])
+        db.execute(stmt)
+        return event_uuid
+
+    db.add(OccupancyLog(**values))
+    return event_uuid
+
+
+def build_occupancy_stats_event(
+    *,
+    location: str,
+    area: str,
+    stats: dict,
+    camera_name: str | None = None,
+    captured_at: datetime | None = None,
+    event_id: uuid.UUID | None = None,
+) -> OccupancyStatsEvent:
+    return OccupancyStatsEvent(
+        event_id=event_id or uuid.uuid4(),
         location=location,
         area=area,
+        captured_at=_ensure_utc(captured_at or datetime.now(timezone.utc)),
+        occupancy_rate=float(stats.get("occupancy_rate", -1.0) or -1.0),
         total_people=int(stats.get("total_number_of_person", 0) or 0),
         total_hogging=int(stats.get("total_number_of_hogging_items", 0) or 0),
         total_seats=int(stats.get("total_number_of_seats", 0) or 0),
-        occupancy_rate=float(stats.get("occupancy_rate", -1.0) or -1.0),
-        video_source=source,
-        frame_index=frame_index,
+        camera_name=camera_name,
     )
-    db.add(log_entry)
+
+
+def _aggregate_area_events(events: list[OccupancyStatsEvent]) -> tuple[float, int] | None:
+    by_camera: dict[str, list[float]] = {}
+    total_samples = 0
+    for event in events:
+        rate = float(event.occupancy_rate)
+        if rate < 0:
+            continue
+        total_samples += 1
+        by_camera.setdefault(event.camera_name or "", []).append(rate)
+
+    if not by_camera:
+        return None
+
+    camera_rates = [sum(values) / len(values) for values in by_camera.values() if values]
+    if not camera_rates:
+        return None
+    return max(0.0, sum(camera_rates) / len(camera_rates)), total_samples
+
+
+def _upsert_area_snapshot(
+    db: Session,
+    *,
+    location: str,
+    area: str,
+    occupancy_rate: float,
+    sample_count: int,
+    window_seconds: int,
+    measured_at: datetime,
+) -> None:
+    values = {
+        "id": uuid.uuid4(),
+        "location": location,
+        "area": area,
+        "occupancy_rate": float(occupancy_rate),
+        "sample_count": int(sample_count),
+        "window_seconds": int(window_seconds),
+        "measured_at": _ensure_utc(measured_at),
+    }
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        stmt = postgresql_insert(AreaOccupancySnapshot).values(**values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["location", "area", "measured_at", "window_seconds"],
+            set_={
+                "occupancy_rate": values["occupancy_rate"],
+                "sample_count": values["sample_count"],
+            },
+        )
+        db.execute(stmt)
+        return
+
+    db.add(AreaOccupancySnapshot(**values))
 
 
 def aggregate_area_occupancy_from_logs(
@@ -281,21 +397,78 @@ def aggregate_area_occupancy_from_logs(
 
 def compute_and_store_area_snapshots(*, window_seconds: int) -> int:
     now = datetime.now(timezone.utc)
+    measured_at = _bucket_datetime(now, window_seconds)
+    snapshots_for_cache: list[CachedAreaSnapshot] = []
+
+    if cache_enabled():
+        active_areas = get_active_areas()
+        if active_areas:
+            with SessionLocal() as db:
+                created_count = 0
+                for location, area in active_areas:
+                    events = get_window_events(
+                        location=location,
+                        area=area,
+                        window_seconds=window_seconds,
+                        measured_at=measured_at,
+                    )
+                    aggregate = _aggregate_area_events(events)
+                    if aggregate is None:
+                        continue
+                    occupancy_rate, sample_count = aggregate
+                    _upsert_area_snapshot(
+                        db,
+                        location=location,
+                        area=area,
+                        occupancy_rate=occupancy_rate,
+                        sample_count=sample_count,
+                        window_seconds=window_seconds,
+                        measured_at=measured_at,
+                    )
+                    snapshots_for_cache.append(
+                        CachedAreaSnapshot(
+                            location=location,
+                            area=area,
+                            occupancy_rate=occupancy_rate,
+                            sample_count=sample_count,
+                            window_seconds=window_seconds,
+                            measured_at=measured_at,
+                        )
+                    )
+                    created_count += 1
+                db.commit()
+
+            for snapshot in snapshots_for_cache:
+                store_latest_snapshot(snapshot)
+            return created_count
+
     with SessionLocal() as db:
-        aggregates = aggregate_area_occupancy_from_logs(db, window_seconds=window_seconds, now=now)
+        aggregates = aggregate_area_occupancy_from_logs(db, window_seconds=window_seconds, now=measured_at)
         for item in aggregates:
-            db.add(
-                AreaOccupancySnapshot(
+            _upsert_area_snapshot(
+                db,
+                location=item["location"],
+                area=item["area"],
+                occupancy_rate=item["occupancy_rate"],
+                sample_count=item["sample_count"],
+                window_seconds=window_seconds,
+                measured_at=measured_at,
+            )
+            snapshots_for_cache.append(
+                CachedAreaSnapshot(
                     location=item["location"],
                     area=item["area"],
                     occupancy_rate=item["occupancy_rate"],
                     sample_count=item["sample_count"],
                     window_seconds=window_seconds,
-                    measured_at=now,
+                    measured_at=measured_at,
                 )
             )
         db.commit()
-        return len(aggregates)
+
+    for snapshot in snapshots_for_cache:
+        store_latest_snapshot(snapshot)
+    return len(snapshots_for_cache)
 
 
 def run_camera_capture_cycle() -> int:
@@ -304,6 +477,7 @@ def run_camera_capture_cycle() -> int:
 
     now = datetime.now(timezone.utc)
     captured = 0
+    pending_events: list[OccupancyStatsEvent] = []
     with SessionLocal() as db:
         cameras = (
             db.execute(select(CameraSource).where(CameraSource.enabled.is_(True)))
@@ -351,6 +525,13 @@ def run_camera_capture_cycle() -> int:
                 try:
                     success, stats = future.result()
                     if success and stats:
+                        event = build_occupancy_stats_event(
+                            location=camera.location,
+                            area=camera.area,
+                            stats=stats,
+                            camera_name=camera.name,
+                            captured_at=now,
+                        )
                         save_occupancy_log(
                             db,
                             location=camera.location,
@@ -359,15 +540,20 @@ def run_camera_capture_cycle() -> int:
                             source=camera.name,
                             frame_index=None,
                             captured_at=now,
+                            event_id=event.event_id,
+                            camera_name=camera.name,
                         )
                         camera.last_captured_at = now
                         db.add(camera)
+                        pending_events.append(event)
                         captured += 1
                 except Exception:
                     logger.exception("camera capture: processing future failed camera=%s", camera.name)
 
         if captured > 0:
             db.commit()
+            for event in pending_events:
+                add_stats_event_to_window(event)
 
     return captured
 
