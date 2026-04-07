@@ -4,6 +4,7 @@ import logging
 import uuid
 from typing import Annotated, Optional, Dict, Any, get_type_hints
 from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from openai import AsyncOpenAI
 
 from booking_system import OptimizedBookingSystem
@@ -238,6 +239,8 @@ class BookingAgent:
         self.api_key = api_key or os.environ.get("AI_API_KEY", "")
         self.model_id = model_id or os.environ.get("AI_MODEL", "deepseek-chat")
         self.base_url = os.environ.get("AI_BASE_URL", "https://api.deepseek.com")
+        self.timeout_seconds = float(os.environ.get("AI_TIMEOUT_SECONDS", "180"))
+        self.timezone_name = os.environ.get("AI_AGENT_TIMEZONE", "Asia/Hong_Kong")
         self.user_id = uuid.UUID(user_id) if user_id else None
         self.agent: Optional[_SimpleAgent] = None
         self.collected_info: Dict[str, Any] = {
@@ -250,18 +253,23 @@ class BookingAgent:
 
     async def initialize_agent(self):
         """Initialize the AI agent with the configured LLM provider and tools."""
+        today = self._current_local_date().isoformat()
         LOGGER.info(
-            "booking_agent_initialize_start user_id=%s model=%s base_url=%s",
+            "booking_agent_initialize_start user_id=%s model=%s base_url=%s timeout_seconds=%s timezone=%s today=%s",
             self.user_id,
             self.model_id,
             self.base_url,
+            self.timeout_seconds,
+            self.timezone_name,
+            today,
         )
         client = AsyncOpenAI(
             base_url=self.base_url,
             api_key=self.api_key,
+            timeout=self.timeout_seconds,
         )
 
-        instructions = """
+        instructions = f"""
         You are a booking assistant for HKU Library. Your job is to collect booking information from users and execute the booking.
         IMPORTANT: Users provide information in NATURAL LANGUAGE (names, not codes). You must convert names to codes using the conversion tools.
         ═══════════════════════════════════════════════════════════════
@@ -276,7 +284,7 @@ class BookingAgent:
         3. DATE (booking date):
         - User will say: "tomorrow", "December 28", "next Monday", etc.
         - You must: Convert to YYYYMMDD format and call _collect_date()
-        - Today is 2026-04-06
+        - Today is {today} in timezone {self.timezone_name}
         4. TIME SESSIONS (time slots):
         - User will say: "8 to 9 AM", "morning", "8:00-9:00", etc.
         - If the user gives vague phrases (morning/afternoon/evening), ask a follow-up question for exact start and end time first.
@@ -336,6 +344,18 @@ class BookingAgent:
             self.user_id,
             len(self.agent._tool_funcs),
         )
+
+    def _current_local_date(self):
+        """Return the current date in the configured booking timezone."""
+        try:
+            tz = ZoneInfo(self.timezone_name)
+        except ZoneInfoNotFoundError:
+            LOGGER.warning(
+                "booking_agent_invalid_timezone timezone=%s fallback=Asia/Hong_Kong",
+                self.timezone_name,
+            )
+            tz = ZoneInfo("Asia/Hong_Kong")
+        return datetime.now(tz).date()
 
     def set_user_id(self, user_id: str) -> None:
         """Set the user ID for this agent."""
