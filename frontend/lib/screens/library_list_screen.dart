@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../widgets/library_map_viewer.dart';
+import '../theme/app_theme.dart';
 import 'booking_screen.dart';
 import 'booking_history_screen.dart';
 
@@ -21,27 +22,24 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
   }
 
   Future<void> _refreshLibraries() async {
-    setState(() {
-      _librariesFuture = ApiService.getLibraries();
-    });
+    setState(() => _librariesFuture = ApiService.getLibraries());
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return DefaultTabController(
       length: 2,
       child: Column(
         children: [
           Container(
-            color: Colors.white,
-            child: const TabBar(
-              tabs: [
+            color: cs.surfaceContainerLow,
+            child: TabBar(
+              tabs: const [
                 Tab(text: "Book"),
                 Tab(text: "My Reservations"),
               ],
-              labelColor: Colors.teal,
-              unselectedLabelColor: Colors.grey,
-              indicatorColor: Colors.teal,
             ),
           ),
           Expanded(
@@ -55,29 +53,27 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
   }
 
   Widget _buildLibraryList() {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Column(
       children: [
-        // Header Row
         Container(
           width: double.infinity,
-          height: 48,
+          height: 44,
           decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+            color: cs.surfaceContainerLow,
+            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
           ),
           alignment: Alignment.center,
-          child: const Text(
+          child: Text(
             "All Libraries",
-            style: TextStyle(
-              fontSize: 14,
+            style: tt.labelLarge?.copyWith(
               fontWeight: FontWeight.bold,
-              color: Colors.teal,
+              color: cs.primary,
             ),
-            textAlign: TextAlign.center,
           ),
         ),
-
-        // List of Libraries
         Expanded(
           child: FutureBuilder<List<dynamic>>(
             future: _librariesFuture,
@@ -89,14 +85,10 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
-                        Icons.error_outline,
-                        color: Colors.red,
-                        size: 48,
-                      ),
-                      const SizedBox(height: 16),
+                      Icon(Icons.error_outline, color: cs.error, size: 48),
+                      const SizedBox(height: AppSpacing.lg),
                       Text('Error: ${snapshot.error}'),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpacing.lg),
                       ElevatedButton(
                         onPressed: _refreshLibraries,
                         child: const Text('Retry'),
@@ -112,11 +104,11 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
               return RefreshIndicator(
                 onRefresh: _refreshLibraries,
                 child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.sm),
                   itemCount: libraries.length,
-                  itemBuilder: (context, index) {
-                    final lib = libraries[index];
-                    return LibraryListItem(library: lib);
-                  },
+                  itemBuilder: (context, index) =>
+                      LibraryListItem(library: libraries[index]),
                 ),
               );
             },
@@ -129,7 +121,6 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
 
 class LibraryListItem extends StatefulWidget {
   final dynamic library;
-
   const LibraryListItem({super.key, required this.library});
 
   @override
@@ -144,131 +135,116 @@ class _LibraryListItemState extends State<LibraryListItem> {
     setState(() {
       _isExpanded = !_isExpanded;
       if (_isExpanded && _detailsFuture == null) {
-        _detailsFuture = ApiService.getLibraryDetails(widget.library['id']);
+        _detailsFuture =
+            ApiService.getLibraryDetails(widget.library['id']);
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: _isExpanded ? 4 : 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: _isExpanded
-            ? const BorderSide(color: Colors.teal, width: 2)
-            : BorderSide.none,
-      ),
-      child: Column(
-        children: [
-          ListTile(
-            leading: const Icon(
-              Icons.local_library,
-              color: Colors.teal,
-              size: 36,
+    final cs = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+      child: Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          side: _isExpanded
+              ? BorderSide(color: cs.primary, width: 1.5)
+              : BorderSide(
+                  color: cs.outlineVariant.withValues(alpha: 0.5)),
+        ),
+        child: Column(
+          children: [
+            ListTile(
+              leading: Icon(Icons.local_library,
+                  color: cs.primary, size: 32),
+              title: Text(
+                widget.library['name'] ?? 'Unknown Library',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(widget.library['campus'] ?? 'HKU Campus'),
+              trailing: Icon(
+                _isExpanded ? Icons.expand_less : Icons.expand_more,
+                color: _isExpanded ? cs.primary : cs.onSurfaceVariant,
+              ),
+              onTap: _toggleExpand,
             ),
-            title: Text(
-              widget.library['name'] ?? 'Unknown Library',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(widget.library['campus'] ?? 'HKU Campus'),
-            trailing: Icon(
-              _isExpanded ? Icons.expand_less : Icons.expand_more,
-              color: _isExpanded ? Colors.teal : Colors.grey,
-            ),
-            onTap: _toggleExpand,
-          ),
-          if (_isExpanded)
-            FutureBuilder<Map<String, dynamic>>(
-              future: _detailsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                } else if (snapshot.hasError) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      'Error: ${snapshot.error}',
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  );
-                } else if (!snapshot.hasData) {
-                  return const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text('No details available.'),
-                  );
-                }
-
-                final library = snapshot.data!;
-                final facilities = library['facilities'] as List<dynamic>;
-
-                // Group facilities by Type
-                final Map<String, List<dynamic>> groupedFacilities = {};
-                for (var f in facilities) {
-                  final type = f['type'] ?? 'Other';
-                  if (!groupedFacilities.containsKey(type)) {
-                    groupedFacilities[type] = [];
-                  }
-                  groupedFacilities[type]!.add(f);
-                }
-
-                final groupKeys = groupedFacilities.keys.toList();
-                groupKeys.sort();
-
-                if (groupKeys.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text("No facilities available."),
-                  );
-                }
-
-                return ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: groupKeys.length,
-                  separatorBuilder: (context, index) =>
-                      const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final type = groupKeys[index];
-                    final items = groupedFacilities[type]!;
-
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 4,
-                      ),
-                      leading: Icon(
-                        _getFacilityIcon(type),
-                        color: Colors.teal[300],
-                        size: 24,
-                      ),
-                      title: Text(type),
-                      trailing: Chip(
-                        label: Text('${items.length}'),
-                        backgroundColor: Colors.teal[50],
-                        labelStyle: TextStyle(
-                          color: Colors.teal[800],
-                          fontSize: 12,
-                        ),
-                      ),
-                      onTap: () {
-                        _showFacilitySelectionDialog(
-                          context,
-                          type,
-                          items,
-                          library,
-                        );
-                      },
+            if (_isExpanded)
+              FutureBuilder<Map<String, dynamic>>(
+                future: _detailsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.all(AppSpacing.lg),
+                      child: Center(child: CircularProgressIndicator()),
                     );
-                  },
-                );
-              },
-            ),
-        ],
+                  } else if (snapshot.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Text('Error: ${snapshot.error}',
+                          style: TextStyle(color: cs.error)),
+                    );
+                  } else if (!snapshot.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.all(AppSpacing.lg),
+                      child: Text('No details available.'),
+                    );
+                  }
+
+                  final library = snapshot.data!;
+                  final facilities =
+                      library['facilities'] as List<dynamic>;
+
+                  final Map<String, List<dynamic>> grouped = {};
+                  for (var f in facilities) {
+                    final type = f['type'] ?? 'Other';
+                    grouped.putIfAbsent(type, () => []).add(f);
+                  }
+                  final groupKeys = grouped.keys.toList()..sort();
+
+                  if (groupKeys.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(AppSpacing.lg),
+                      child: Text("No facilities available."),
+                    );
+                  }
+
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: groupKeys.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final type = groupKeys[index];
+                      final items = grouped[type]!;
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xl,
+                            vertical: AppSpacing.xs),
+                        leading: Icon(_getFacilityIcon(type),
+                            color: cs.secondary, size: 24),
+                        title: Text(type),
+                        trailing: Chip(
+                          label: Text('${items.length}',
+                              style: TextStyle(
+                                  color: cs.onSecondaryContainer,
+                                  fontSize: 12)),
+                          backgroundColor: cs.secondaryContainer,
+                          side: BorderSide.none,
+                        ),
+                        onTap: () => _showFacilitySelectionDialog(
+                            context, type, items, library),
+                      );
+                    },
+                  );
+                },
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -279,72 +255,61 @@ class _LibraryListItemState extends State<LibraryListItem> {
     List<dynamic> items,
     dynamic library,
   ) {
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
-      builder: (context) {
-        return Dialog(
-          insetPadding: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        type,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(type,
                         maxLines: 2,
-                        softWrap: true,
                         overflow: TextOverflow.visible,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: cs.outlineVariant),
+            SizedBox(
+              height: 400,
+              child: LibraryMapViewer(
+                facilities: items,
+                onFacilityTap: (item) {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BookingScreen(
+                        facilityId: item['id'],
+                        facilityName: item['name'],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
-              const Divider(height: 1),
-
-              SizedBox(
-                height: 400,
-                child: LibraryMapViewer(
-                  facilities: items,
-                  onFacilityTap: (item) {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => BookingScreen(
-                          facilityId: item['id'],
-                          facilityName: item['name'],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  "Tap a facility to book.",
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Text("Tap a facility to book.",
+                  style: TextStyle(color: cs.onSurfaceVariant)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

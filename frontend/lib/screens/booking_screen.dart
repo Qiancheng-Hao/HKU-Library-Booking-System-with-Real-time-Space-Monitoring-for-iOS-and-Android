@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 
 class BookingScreen extends StatefulWidget {
   final int facilityId;
@@ -34,46 +35,40 @@ class _BookingScreenState extends State<BookingScreen> {
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final data = await ApiService.getFacilityTimeSlots(
-        widget.facilityId,
-        dateStr,
-      );
+          widget.facilityId, dateStr);
       setState(() {
         _slots = data['slots'];
         _isLoading = false;
-        _selectedSlot = null; // Reset selection on date change
+        _selectedSlot = null;
       });
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   Future<void> _confirmBooking() async {
     if (_selectedSlot == null) return;
-
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-
       await ApiService.createReservation(
         facilityId: widget.facilityId,
         date: dateStr,
         startTime: _selectedSlot!['start_time'],
         endTime: _selectedSlot!['end_time'],
       );
-
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Booking Confirmed!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: const Text('Booking Confirmed!'),
+            backgroundColor: AppColors.statusAvailable,
           ),
         );
-        Navigator.pop(context); // Go back to details
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -96,6 +91,8 @@ class _BookingScreenState extends State<BookingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     final today = DateTime.now();
     final tomorrow = today.add(const Duration(days: 1));
     final isToday = _selectedDate.day == today.day;
@@ -103,15 +100,13 @@ class _BookingScreenState extends State<BookingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text("Book ${widget.facilityName}"),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
-          // Date Selection
+          // Date selection
           Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.teal[50],
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            color: cs.surfaceContainerLow,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -125,7 +120,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     }
                   },
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: AppSpacing.lg),
                 ChoiceChip(
                   label: const Text("Tomorrow"),
                   selected: !isToday,
@@ -140,90 +135,86 @@ class _BookingScreenState extends State<BookingScreen> {
             ),
           ),
 
-          // Time Slots Grid
+          // Time slots grid
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _slots.isEmpty
-                ? const Center(child: Text("No slots available."))
-                : GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
+                    ? Center(
+                        child: Text('No slots available.',
+                            style: TextStyle(color: cs.onSurfaceVariant)),
+                      )
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 3,
                           childAspectRatio: 2.5,
                           crossAxisSpacing: 10,
                           mainAxisSpacing: 10,
                         ),
-                    itemCount: _slots.length,
-                    itemBuilder: (context, index) {
-                      final slot = _slots[index];
-                      final isAvailable = slot['status'] == 'available';
-                      final isSelected = _selectedSlot == slot;
+                        itemCount: _slots.length,
+                        itemBuilder: (context, index) {
+                          final slot = _slots[index];
+                          final isAvailable = slot['status'] == 'available';
+                          final isSelected = _selectedSlot == slot;
 
-                      final startTimeStr = slot['start_time'].toString();
-                      final startTimeDisplay = startTimeStr.substring(0, 5);
-                      final endTimeDisplay = slot['end_time']
-                          .toString()
-                          .substring(0, 5);
+                          final startTimeDisplay =
+                              slot['start_time'].toString().substring(0, 5);
+                          final endTimeDisplay =
+                              slot['end_time'].toString().substring(0, 5);
 
-                      return InkWell(
-                        onTap: isAvailable
-                            ? () {
-                                setState(() => _selectedSlot = slot);
-                              }
-                            : null,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? Colors.blue
-                                : isAvailable
-                                ? Colors.green[100]
-                                : Colors.grey[300],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isSelected
-                                  ? Colors.blue
-                                  : Colors.transparent,
-                              width: 2,
+                          final Color bgColor;
+                          final Color textColor;
+                          if (isSelected) {
+                            bgColor = cs.primary;
+                            textColor = cs.onPrimary;
+                          } else if (isAvailable) {
+                            bgColor = AppColors.statusAvailable
+                                .withValues(alpha: 0.15);
+                            textColor = AppColors.statusAvailable;
+                          } else {
+                            bgColor = cs.surfaceContainerHighest;
+                            textColor = cs.onSurfaceVariant;
+                          }
+
+                          return InkWell(
+                            onTap: isAvailable
+                                ? () => setState(() => _selectedSlot = slot)
+                                : null,
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.sm),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: bgColor,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.sm),
+                                border: isSelected
+                                    ? Border.all(
+                                        color: cs.primary, width: 2)
+                                    : null,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                "$startTimeDisplay\n$endTimeDisplay",
+                                textAlign: TextAlign.center,
+                                style: tt.labelSmall?.copyWith(
+                                  color: textColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            "$startTimeDisplay - $endTimeDisplay",
-                            style: TextStyle(
-                              color: isSelected
-                                  ? Colors.white
-                                  : isAvailable
-                                  ? Colors.green[900]
-                                  : Colors.grey[600],
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                          );
+                        },
+                      ),
           ),
 
-          // Confirm Button
+          // Confirm button
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _selectedSlot != null ? _confirmBooking : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.teal,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey[300],
-                ),
-                child: const Text(
-                  "Confirm Booking",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: ElevatedButton(
+              onPressed: _selectedSlot != null ? _confirmBooking : null,
+              child: const Text("Confirm Booking"),
             ),
           ),
         ],

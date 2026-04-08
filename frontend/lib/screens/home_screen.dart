@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,11 +13,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // ignore: unused_field
   String _locationMessage = "Fetching location...";
   Position? _currentPosition;
   late Future<Map<String, dynamic>> _occupancyFuture;
   late Future<Map<String, dynamic>> _recommendationFuture;
-  String _recommendationStrategy = 'occupancyRate'; // Default: Quietest
+  String _recommendationStrategy = 'occupancyRate';
 
   @override
   void initState() {
@@ -38,12 +40,9 @@ class _HomeScreenState extends State<HomeScreen> {
     bool serviceEnabled;
     LocationPermission permission;
 
-    // Test if location services are enabled.
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      setState(() {
-        _locationMessage = "Location services are disabled.";
-      });
+      setState(() => _locationMessage = "Location services are disabled.");
       return;
     }
 
@@ -51,31 +50,24 @@ class _HomeScreenState extends State<HomeScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        setState(() {
-          _locationMessage = "Location permissions are denied";
-        });
+        setState(() => _locationMessage = "Location permissions are denied");
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      setState(() {
-        _locationMessage =
-            "Location permissions are permanently denied, we cannot request permissions.";
-      });
+      setState(() => _locationMessage =
+          "Location permissions are permanently denied, we cannot request permissions.");
       return;
     }
 
     try {
       Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
       setState(() {
         _currentPosition = position;
-        _locationMessage =
-            "Lat: ${position.latitude}, Long: ${position.longitude}";
+        _locationMessage = "Lat: ${position.latitude}, Long: ${position.longitude}";
         _occupancyFuture = ApiService.getRealtimeOccupancy(
           latitude: position.latitude,
           longitude: position.longitude,
@@ -83,21 +75,15 @@ class _HomeScreenState extends State<HomeScreen> {
         _recommendationFuture = _fetchRecommendation();
       });
     } catch (e) {
-      setState(() {
-        _locationMessage = "Error fetching location: $e";
-      });
+      setState(() => _locationMessage = "Error fetching location: $e");
     }
   }
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) {
-      return 'Good Morning';
-    } else if (hour < 18) {
-      return 'Good Afternoon';
-    } else {
-      return 'Good Evening';
-    }
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
   }
 
   Future<void> _refreshOccupancy() async {
@@ -108,7 +94,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       _recommendationFuture = _fetchRecommendation();
     });
-
     await Future.wait([_occupancyFuture, _recommendationFuture]);
   }
 
@@ -123,6 +108,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Consumer<AuthProvider>(
       builder: (context, auth, child) {
         final userName = auth.userName ?? 'User';
@@ -131,29 +119,27 @@ class _HomeScreenState extends State<HomeScreen> {
         return Scaffold(
           body: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.all(AppSpacing.xl),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 20),
                   Text(
                     greeting,
-                    style: TextStyle(
-                      fontSize: 28,
+                    style: tt.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w300,
-                      color: Colors.grey[800],
+                      color: cs.onSurface,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.sm),
                   Text(
                     userName,
-                    style: const TextStyle(
-                      fontSize: 32,
+                    style: tt.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.teal,
+                      color: cs.primary,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpacing.xl),
 
                   // Best Spot Card
                   FutureBuilder<Map<String, dynamic>>(
@@ -162,38 +148,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       Widget content;
 
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        content = const Center(
-                          child: CircularProgressIndicator(),
-                        );
+                        content = const Center(child: CircularProgressIndicator());
                       } else if (snapshot.hasError ||
                           !snapshot.hasData ||
                           snapshot.data!.isEmpty) {
                         content = Row(
                           children: [
-                            const Icon(
-                              Icons.error_outline,
-                              size: 40,
-                              color: Colors.grey,
-                            ),
-                            const SizedBox(width: 16),
+                            Icon(Icons.error_outline, size: 40,
+                                color: cs.onSurfaceVariant),
+                            const SizedBox(width: AppSpacing.lg),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    "No Recommendation",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  Text(
-                                    "Check open hours or try again later.",
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 13,
-                                    ),
-                                  ),
+                                  Text("No Recommendation",
+                                      style: tt.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.bold)),
+                                  Text("Check open hours or try again later.",
+                                      style: tt.bodySmall?.copyWith(
+                                          color: cs.onSurfaceVariant)),
                                 ],
                               ),
                             ),
@@ -206,47 +179,35 @@ class _HomeScreenState extends State<HomeScreen> {
                           libraryName = 'Chi Wah Learning\nCommons';
                         }
                         final area = data['area'];
-                        final occupancyRate = (data['occupancyRate'] as num)
-                            .toDouble();
+                        final occupancyRate =
+                            (data['occupancyRate'] as num).toDouble();
                         final percentage = occupancyRate.toStringAsFixed(1);
-                        final distance = (data['distanceFromUser'] as num)
-                            .toDouble();
+                        final distance =
+                            (data['distanceFromUser'] as num).toDouble();
 
                         content = Row(
                           children: [
-                            const Icon(
-                              Icons.recommend,
-                              color: Colors.teal,
-                              size: 40,
-                            ),
-                            const SizedBox(width: 16),
+                            Icon(Icons.recommend, color: cs.primary, size: 40),
+                            const SizedBox(width: AppSpacing.lg),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     "Best Study Spot (${_recommendationStrategy == 'occupancyRate' ? 'Quietest' : 'Closest'})",
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.teal,
-                                      fontSize: 14,
-                                    ),
+                                    style: tt.labelLarge?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: cs.primary),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "$libraryName\n$area",
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Text("$libraryName\n$area",
+                                      style: tt.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: AppSpacing.xs),
                                   Text(
                                     "$percentage% Occupied • ${distance.toStringAsFixed(0)}m away",
-                                    style: TextStyle(
-                                      color: Colors.grey[700],
-                                      fontSize: 13,
-                                    ),
+                                    style: tt.bodySmall?.copyWith(
+                                        color: cs.onSurfaceVariant),
                                   ),
                                 ],
                               ),
@@ -258,12 +219,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       return Stack(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(AppSpacing.lg),
                             decoration: BoxDecoration(
-                              color: Colors.teal.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
+                              color: cs.primaryContainer.withValues(alpha: 0.35),
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.lg),
                               border: Border.all(
-                                color: Colors.teal.withValues(alpha: 0.3),
+                                color: cs.primary.withValues(alpha: 0.25),
                               ),
                             ),
                             child: content,
@@ -272,59 +234,54 @@ class _HomeScreenState extends State<HomeScreen> {
                             top: 0,
                             right: 0,
                             child: PopupMenuButton<String>(
-                              icon: const Icon(Icons.tune, color: Colors.teal),
+                              icon: Icon(Icons.tune, color: cs.primary),
                               onSelected: _changeStrategy,
-                              itemBuilder: (BuildContext context) =>
-                                  <PopupMenuEntry<String>>[
-                                    const PopupMenuItem<String>(
-                                      value: 'occupancyRate',
-                                      child: Text('Prioritize Quietest'),
-                                    ),
-                                    const PopupMenuItem<String>(
-                                      value: 'distance',
-                                      child: Text('Prioritize Closest'),
-                                    ),
-                                  ],
+                              itemBuilder: (_) => [
+                                const PopupMenuItem<String>(
+                                  value: 'occupancyRate',
+                                  child: Text('Prioritize Quietest'),
+                                ),
+                                const PopupMenuItem<String>(
+                                  value: 'distance',
+                                  child: Text('Prioritize Closest'),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       );
                     },
                   ),
+
                   const SizedBox(height: 30),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         "Live Occupancy",
-                        style: TextStyle(
-                          fontSize: 20,
+                        style: tt.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Colors.teal,
+                          color: cs.primary,
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.refresh, color: Colors.teal),
+                        icon: Icon(Icons.refresh, color: cs.primary),
                         onPressed: _refreshOccupancy,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: AppSpacing.sm),
+
                   Expanded(
                     child: FutureBuilder<Map<String, dynamic>>(
                       future: _occupancyFuture,
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
                         } else if (snapshot.hasError) {
                           return Center(
-                            child: Text(
-                              'Error: ${snapshot.error}',
-                              style: const TextStyle(color: Colors.red),
-                            ),
+                            child: Text('Error: ${snapshot.error}',
+                                style: TextStyle(color: cs.error)),
                           );
                         } else if (!snapshot.hasData ||
                             (snapshot.data!['libraries'] as List).isEmpty) {
@@ -332,45 +289,40 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(
-                                  Icons.info_outline,
-                                  size: 60,
-                                  color: Colors.grey[400],
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No real-time data available yet.',
-                                  style: TextStyle(color: Colors.grey[600]),
-                                ),
+                                Icon(Icons.info_outline,
+                                    size: 60, color: cs.onSurfaceVariant),
+                                const SizedBox(height: AppSpacing.lg),
+                                Text('No real-time data available yet.',
+                                    style: TextStyle(
+                                        color: cs.onSurfaceVariant)),
                               ],
                             ),
                           );
                         }
 
                         final items = snapshot.data!['libraries'] as List;
-
                         return ListView.builder(
                           itemCount: items.length,
                           itemBuilder: (context, index) {
                             final item = items[index];
-                            final occupancyRate = (item['occupancyRate'] as num)
-                                .toDouble();
-                            final percentage = occupancyRate.toStringAsFixed(1);
+                            final occupancyRate =
+                                (item['occupancyRate'] as num).toDouble();
+                            final percentage =
+                                occupancyRate.toStringAsFixed(1);
                             final isCrowded = occupancyRate > 70;
                             final isModerate =
                                 occupancyRate > 30 && occupancyRate <= 70;
 
-                            Color statusColor;
-                            String statusText;
-
+                            final Color statusColor;
+                            final String statusText;
                             if (isCrowded) {
-                              statusColor = Colors.red;
+                              statusColor = AppColors.statusBusy;
                               statusText = "Busy";
                             } else if (isModerate) {
-                              statusColor = Colors.orange;
+                              statusColor = AppColors.statusModerate;
                               statusText = "Moderate";
                             } else {
-                              statusColor = Colors.green;
+                              statusColor = AppColors.statusAvailable;
                               statusText = "Quiet";
                             }
 
@@ -381,42 +333,31 @@ class _HomeScreenState extends State<HomeScreen> {
                             }
 
                             return Card(
-                              elevation: 2,
-                              margin: const EdgeInsets.only(bottom: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                              margin: const EdgeInsets.only(bottom: AppSpacing.md),
                               child: Padding(
-                                padding: const EdgeInsets.all(16.0),
+                                padding: const EdgeInsets.all(AppSpacing.lg),
                                 child: Row(
                                   children: [
                                     Container(
-                                      width: 10,
+                                      width: 4,
                                       height: 50,
                                       decoration: BoxDecoration(
                                         color: statusColor,
-                                        borderRadius: BorderRadius.circular(5),
+                                        borderRadius:
+                                            BorderRadius.circular(AppRadius.sm),
                                       ),
                                     ),
-                                    const SizedBox(width: 16),
+                                    const SizedBox(width: AppSpacing.lg),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            libraryName,
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                          Text(
-                                            item['area'] ?? '',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey[600],
-                                            ),
-                                          ),
+                                          Text(libraryName,
+                                              style: tt.titleMedium),
+                                          Text(item['area'] ?? '',
+                                              style: tt.bodySmall?.copyWith(
+                                                  color: cs.onSurfaceVariant)),
                                         ],
                                       ),
                                     ),
@@ -426,18 +367,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                       children: [
                                         Text(
                                           "$percentage%",
-                                          style: TextStyle(
-                                            fontSize: 20,
+                                          style: tt.titleLarge?.copyWith(
                                             fontWeight: FontWeight.bold,
                                             color: statusColor,
                                           ),
                                         ),
                                         Text(
                                           statusText,
-                                          style: TextStyle(
-                                            fontSize: 12,
+                                          style: tt.labelSmall?.copyWith(
                                             color: statusColor,
-                                            fontWeight: FontWeight.w500,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                       ],
