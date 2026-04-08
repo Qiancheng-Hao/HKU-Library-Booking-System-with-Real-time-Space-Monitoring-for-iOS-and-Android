@@ -216,7 +216,7 @@ class _LibraryListItemState extends State<LibraryListItem> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: groupKeys.length,
-                    separatorBuilder: (_, __) =>
+                    separatorBuilder: (_, separatorIndex) =>
                         const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final type = groupKeys[index];

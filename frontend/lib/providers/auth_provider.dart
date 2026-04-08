@@ -15,15 +15,21 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> _checkLoginStatus() async {
-    final token = await ApiService.getToken();
-    if (token != null) {
-      _isLoggedIn = true;
-      await _fetchUserProfile();
-    } else {
+    try {
+      final token = await ApiService.getToken();
+      if (token != null) {
+        _isLoggedIn = true;
+        await _fetchUserProfile();
+      } else {
+        _isLoggedIn = false;
+      }
+    } catch (e) {
+      debugPrint('Error checking login status: $e');
       _isLoggedIn = false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-    _isLoading = false;
-    notifyListeners();
   }
 
   Future<void> login(String email, String password) async {

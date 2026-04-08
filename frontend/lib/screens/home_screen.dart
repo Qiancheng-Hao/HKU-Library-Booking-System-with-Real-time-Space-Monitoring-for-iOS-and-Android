@@ -41,14 +41,17 @@ class _HomeScreenState extends State<HomeScreen> {
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!mounted) return;
     if (!serviceEnabled) {
       setState(() => _locationMessage = "Location services are disabled.");
       return;
     }
 
     permission = await Geolocator.checkPermission();
+    if (!mounted) return;
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
+      if (!mounted) return;
       if (permission == LocationPermission.denied) {
         setState(() => _locationMessage = "Location permissions are denied");
         return;
@@ -65,6 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
+      if (!mounted) return;
       setState(() {
         _currentPosition = position;
         _locationMessage = "Lat: ${position.latitude}, Long: ${position.longitude}";
@@ -75,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _recommendationFuture = _fetchRecommendation();
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _locationMessage = "Error fetching location: $e");
     }
   }
@@ -87,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refreshOccupancy() async {
+    if (!mounted) return;
     setState(() {
       _occupancyFuture = ApiService.getRealtimeOccupancy(
         latitude: _currentPosition?.latitude,
