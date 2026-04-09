@@ -12,35 +12,35 @@ class AppColors {
   static const Color hkuGreen = Color(0xFF006F51);
 
   // Dark tech palette
-  static const Color cyberCyan    = Color(0xFF00D4C8);
-  static const Color deepNavy     = Color(0xFF1A2540); // scaffold bg
-  static const Color navySurface  = Color(0xFF233050); // app bg surface
-  static const Color navyCard     = Color(0xFF2C3D60); // card fill
+  static const Color cyberCyan = Color(0xFF00D4C8);
+  static const Color deepNavy = Color(0xFF1A2540); // scaffold bg
+  static const Color navySurface = Color(0xFF233050); // app bg surface
+  static const Color navyCard = Color(0xFF2C3D60); // card fill
   static const Color navyCardHigh = Color(0xFF364C74); // elevated card
-  static const Color navyOutline  = Color(0xFF445D88); // borders
+  static const Color navyOutline = Color(0xFF445D88); // borders
 
   // Semantic status (same in both modes)
   static const Color statusAvailable = Color(0xFF2ECC8E);
-  static const Color statusModerate  = Color(0xFFF5A623);
-  static const Color statusBusy      = Color(0xFFE05252);
+  static const Color statusModerate = Color(0xFFF5A623);
+  static const Color statusBusy = Color(0xFFE05252);
 }
 
 class AppSpacing {
   AppSpacing._();
-  static const double xs  = 4;
-  static const double sm  = 8;
-  static const double md  = 12;
-  static const double lg  = 16;
-  static const double xl  = 24;
+  static const double xs = 4;
+  static const double sm = 8;
+  static const double md = 12;
+  static const double lg = 16;
+  static const double xl = 24;
   static const double xxl = 32;
 }
 
 class AppRadius {
   AppRadius._();
-  static const double sm   = 8;
-  static const double md   = 12;
-  static const double lg   = 16;
-  static const double xl   = 24;
+  static const double sm = 8;
+  static const double md = 12;
+  static const double lg = 16;
+  static const double xl = 24;
   static const double pill = 999;
 }
 
@@ -88,7 +88,7 @@ class AppTheme {
   AppTheme._();
 
   static ThemeData light() => _buildLight();
-  static ThemeData dark()  => _buildDark();
+  static ThemeData dark() => _buildDark();
 
   // ---- LIGHT (clean HKU green) -------------------------------------------
 
@@ -136,29 +136,29 @@ class AppTheme {
 
     // Override generated tones with the hand-crafted navy palette.
     final cs = base.copyWith(
-      primary:                    AppColors.cyberCyan,
-      onPrimary:                  AppColors.deepNavy,
-      primaryContainer:           const Color(0xFF00332F),
-      onPrimaryContainer:         AppColors.cyberCyan,
-      secondary:                  const Color(0xFF4DD8FF),
-      onSecondary:                AppColors.deepNavy,
-      secondaryContainer:         const Color(0xFF003A4A),
-      onSecondaryContainer:       const Color(0xFF87EEFF),
-      surface:                    AppColors.navySurface,
-      onSurface:                  const Color(0xFFE2EAF8),
-      surfaceContainerLowest:     AppColors.deepNavy,
-      surfaceContainerLow:        AppColors.navyCard,
-      surfaceContainer:           AppColors.navyCard,
-      surfaceContainerHigh:       AppColors.navyCardHigh,
-      surfaceContainerHighest:    const Color(0xFF415A84),
-      onSurfaceVariant:           const Color(0xFFA0BAD8),
-      outline:                    AppColors.navyOutline,
-      outlineVariant:             const Color(0xFF2E4568),
-      inverseSurface:             const Color(0xFFDEE8F8),
-      onInverseSurface:           AppColors.deepNavy,
-      inversePrimary:             AppColors.hkuGreen,
-      shadow:                     Colors.black,
-      scrim:                      Colors.black,
+      primary: AppColors.cyberCyan,
+      onPrimary: AppColors.deepNavy,
+      primaryContainer: const Color(0xFF00332F),
+      onPrimaryContainer: AppColors.cyberCyan,
+      secondary: const Color(0xFF4DD8FF),
+      onSecondary: AppColors.deepNavy,
+      secondaryContainer: const Color(0xFF003A4A),
+      onSecondaryContainer: const Color(0xFF87EEFF),
+      surface: AppColors.navySurface,
+      onSurface: const Color(0xFFE2EAF8),
+      surfaceContainerLowest: AppColors.deepNavy,
+      surfaceContainerLow: AppColors.navyCard,
+      surfaceContainer: AppColors.navyCard,
+      surfaceContainerHigh: AppColors.navyCardHigh,
+      surfaceContainerHighest: const Color(0xFF415A84),
+      onSurfaceVariant: const Color(0xFFA0BAD8),
+      outline: AppColors.navyOutline,
+      outlineVariant: const Color(0xFF2E4568),
+      inverseSurface: const Color(0xFFDEE8F8),
+      onInverseSurface: AppColors.deepNavy,
+      inversePrimary: AppColors.hkuGreen,
+      shadow: Colors.black,
+      scrim: Colors.black,
     );
 
     final tt = GoogleFonts.interTextTheme(
@@ -315,6 +315,36 @@ class AppTheme {
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
         ),
+      ),
+
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return cs.primary;
+          }
+          if (cs.brightness == Brightness.light) {
+            return Colors.white;
+          }
+          return cs.onSurface.withValues(alpha: 0.92);
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return cs.primary.withValues(alpha: 0.45);
+          }
+          if (cs.brightness == Brightness.light) {
+            return const Color(0xFFD7DFDA);
+          }
+          return cs.outline.withValues(alpha: 0.75);
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return cs.primary.withValues(alpha: 0.2);
+          }
+          if (cs.brightness == Brightness.light) {
+            return const Color(0xFFB8C6BE);
+          }
+          return cs.outlineVariant.withValues(alpha: 0.9);
+        }),
       ),
 
       inputDecorationTheme: InputDecorationTheme(

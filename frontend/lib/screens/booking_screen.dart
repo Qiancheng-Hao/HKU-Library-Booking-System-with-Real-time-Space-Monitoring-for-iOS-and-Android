@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/empty_state.dart';
 
 class BookingScreen extends StatefulWidget {
   final int facilityId;
@@ -35,7 +37,9 @@ class _BookingScreenState extends State<BookingScreen> {
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final data = await ApiService.getFacilityTimeSlots(
-          widget.facilityId, dateStr);
+        widget.facilityId,
+        dateStr,
+      );
       setState(() {
         _slots = data['slots'];
         _isLoading = false;
@@ -44,8 +48,9 @@ class _BookingScreenState extends State<BookingScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -54,12 +59,13 @@ class _BookingScreenState extends State<BookingScreen> {
     if (_selectedSlot == null) return;
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-      await ApiService.createReservation(
+      final reservation = await ApiService.createReservation(
         facilityId: widget.facilityId,
         date: dateStr,
         startTime: _selectedSlot!['start_time'],
         endTime: _selectedSlot!['end_time'],
       );
+      await NotificationService.scheduleReservationReminder(reservation);
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -98,9 +104,7 @@ class _BookingScreenState extends State<BookingScreen> {
     final isToday = _selectedDate.day == today.day;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Book ${widget.facilityName}"),
-      ),
+      appBar: AppBar(title: Text("Book ${widget.facilityName}")),
       body: Column(
         children: [
           // Date selection
@@ -138,75 +142,93 @@ class _BookingScreenState extends State<BookingScreen> {
           // Time slots grid
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const LoadingState(message: 'Loading available times...')
                 : _slots.isEmpty
-                    ? Center(
-                        child: Text('No slots available.',
-                            style: TextStyle(color: cs.onSurfaceVariant)),
-                      )
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
+                ? const EmptyState(
+                    icon: Icons.schedule_outlined,
+                    title: 'No slots available',
+                    message: 'Try a different date.',
+                  )
+                : GridView.builder(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 3,
                           childAspectRatio: 2.5,
                           crossAxisSpacing: 10,
                           mainAxisSpacing: 10,
                         ),
-                        itemCount: _slots.length,
-                        itemBuilder: (context, index) {
-                          final slot = _slots[index];
-                          final isAvailable = slot['status'] == 'available';
-                          final isSelected = _selectedSlot == slot;
+                    itemCount: _slots.length,
+                    itemBuilder: (context, index) {
+                      final slot = _slots[index];
+                      final isAvailable = slot['status'] == 'available';
+                      final isSelected = _selectedSlot == slot;
 
-                          final startTimeDisplay =
-                              slot['start_time'].toString().substring(0, 5);
-                          final endTimeDisplay =
-                              slot['end_time'].toString().substring(0, 5);
+                      final startTimeDisplay = slot['start_time']
+                          .toString()
+                          .substring(0, 5);
+                      final endTimeDisplay = slot['end_time']
+                          .toString()
+                          .substring(0, 5);
 
-                          final Color bgColor;
-                          final Color textColor;
-                          if (isSelected) {
-                            bgColor = cs.primary;
-                            textColor = cs.onPrimary;
-                          } else if (isAvailable) {
-                            bgColor = AppColors.statusAvailable
-                                .withValues(alpha: 0.15);
-                            textColor = AppColors.statusAvailable;
-                          } else {
-                            bgColor = cs.surfaceContainerHighest;
-                            textColor = cs.onSurfaceVariant;
-                          }
+                      final Color bgColor;
+                      final Color textColor;
+                      if (isSelected) {
+                        bgColor = cs.primary;
+                        textColor = cs.onPrimary;
+                      } else if (isAvailable) {
+                        bgColor = AppColors.statusAvailable.withValues(
+                          alpha: 0.28,
+                        );
+                        textColor = AppColors.statusAvailable;
+                      } else {
+                        bgColor = cs.surfaceContainerHighest.withValues(
+                          alpha: 0.5,
+                        );
+                        textColor = cs.onSurfaceVariant;
+                      }
 
-                          return InkWell(
-                            onTap: isAvailable
-                                ? () => setState(() => _selectedSlot = slot)
-                                : null,
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.sm),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: bgColor,
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.sm),
-                                border: isSelected
-                                    ? Border.all(
-                                        color: cs.primary, width: 2)
-                                    : null,
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                "$startTimeDisplay\n$endTimeDisplay",
-                                textAlign: TextAlign.center,
-                                style: tt.labelSmall?.copyWith(
-                                  color: textColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                      final Border? borderOverlay;
+                      if (isSelected) {
+                        borderOverlay = Border.all(color: cs.primary, width: 2);
+                      } else if (isAvailable) {
+                        borderOverlay = Border.all(
+                          color: AppColors.statusAvailable.withValues(
+                            alpha: 0.55,
+                          ),
+                          width: 1,
+                        );
+                      } else {
+                        borderOverlay = Border.all(
+                          color: cs.outlineVariant,
+                          width: 1,
+                        );
+                      }
+
+                      return InkWell(
+                        onTap: isAvailable
+                            ? () => setState(() => _selectedSlot = slot)
+                            : null,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: bgColor,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                            border: borderOverlay,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            "$startTimeDisplay\n$endTimeDisplay",
+                            textAlign: TextAlign.center,
+                            style: tt.labelSmall?.copyWith(
+                              color: textColor,
+                              fontWeight: FontWeight.w600,
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
 
           // Confirm button

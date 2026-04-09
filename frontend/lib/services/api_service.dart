@@ -202,7 +202,7 @@ class ApiService {
     }
   }
 
-  static Future<void> createReservation({
+  static Future<Map<String, dynamic>> createReservation({
     required int facilityId,
     required String date,
     required String startTime,
@@ -224,11 +224,13 @@ class ApiService {
     if (response.statusCode != 201) {
       if (response.statusCode == 401) {
         _handleAuthError();
-        return;
+        throw Exception('Not authenticated');
       }
       final error = json.decode(response.body);
       throw error['detail'] ?? 'Failed to create reservation';
     }
+
+    return json.decode(response.body) as Map<String, dynamic>;
   }
 
   static Future<List<dynamic>> getUserReservations() async {

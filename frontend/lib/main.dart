@@ -8,17 +8,23 @@ import 'screens/ai_agent_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/ai_session_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/notification_provider.dart';
+import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.initialize();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => AiSessionProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
       ],
       child: const MyApp(),
     ),
@@ -32,27 +38,28 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, _) => MaterialApp(
-      navigatorKey: navigatorKey,
-      debugShowCheckedModeBanner: false,
-      title: 'HKU Library',
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: themeProvider.themeMode,
-      home: Consumer<AuthProvider>(
-        builder: (context, auth, child) {
-          if (auth.isLoading) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
-          if (auth.isLoggedIn) {
-            return const RootShell();
-          } else {
-            return const LoginScreen();
-          }
-        },
+        navigatorKey: navigatorKey,
+        debugShowCheckedModeBanner: false,
+        title: 'HKU Library',
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: themeProvider.themeMode,
+        home: Consumer<AuthProvider>(
+          builder: (context, auth, child) {
+            if (auth.isLoading) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (auth.isLoggedIn) {
+              return const RootShell();
+            } else {
+              return const LoginScreen();
+            }
+          },
+        ),
       ),
-    ));
+    );
   }
 }
 
@@ -157,9 +164,7 @@ class _AdaptiveAppBarBottom extends StatelessWidget
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final glowColor = isDark
-        ? AppColors.cyberCyan
-        : const Color(0xFF4CAF8A);
+    final glowColor = isDark ? AppColors.cyberCyan : const Color(0xFF4CAF8A);
 
     return Container(
       height: 1.5,

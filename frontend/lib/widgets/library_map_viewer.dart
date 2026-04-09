@@ -91,6 +91,7 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final displayedItems = widget.facilities.where((item) {
       final itemFloor = _toInt(item['floor'], fallback: 1);
       return itemFloor == _selectedFloor;
@@ -118,9 +119,10 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
                       setState(() => _selectedFloor = floor);
                     }
                   },
-                  selectedColor: Colors.teal[100],
+                  selectedColor: cs.primaryContainer,
+                  backgroundColor: cs.surfaceContainerHigh,
                   labelStyle: TextStyle(
-                    color: isSelected ? Colors.teal[900] : Colors.black,
+                    color: isSelected ? cs.onPrimaryContainer : cs.onSurface,
                     fontWeight: isSelected
                         ? FontWeight.bold
                         : FontWeight.normal,
@@ -133,7 +135,7 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
         // Map Area
         Expanded(
           child: Container(
-            color: Colors.grey[200],
+            color: cs.surfaceContainerLow,
             width: double.infinity,
             child: ClipRect(
               child: LayoutBuilder(
@@ -171,8 +173,10 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
                           children: [
                             Positioned.fill(
                               child: CustomPaint(
-                                painter: GridPainter(),
-                                child: Container(color: Colors.white),
+                                painter: GridPainter(
+                                  lineColor: cs.primary.withValues(alpha: 0.10),
+                                ),
+                                child: Container(color: cs.surface),
                               ),
                             ),
 
@@ -241,13 +245,14 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
     double? pixelHeight,
     bool isHighlighted,
   ) {
+    final cs = Theme.of(context).colorScheme;
     final type = (item['type'] as String? ?? '').toLowerCase();
     final name = item['name'] as String? ?? '';
     String identifier = _getMarkerLabel(name);
 
     double defaultWidth = 30;
     double defaultHeight = 30;
-    Color baseColor = Colors.teal;
+    Color baseColor = cs.primary;
     IconData? icon;
 
     if (type.contains('room')) {
@@ -276,8 +281,8 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
         fillColor = baseColor.withValues(alpha: 0.9);
         borderColor = baseColor.withValues(alpha: 1.0);
       } else {
-        fillColor = Colors.grey.withValues(alpha: 0.1);
-        borderColor = Colors.grey.withValues(alpha: 0.3);
+        fillColor = cs.onSurface.withValues(alpha: 0.06);
+        borderColor = cs.onSurface.withValues(alpha: 0.2);
       }
     } else {
       fillColor = baseColor.withValues(alpha: 0.2);
@@ -307,7 +312,7 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
                 icon,
                 size: iconSize > 0 ? iconSize : 0,
                 color: widget.highlightFacilityId != null && !isHighlighted
-                    ? Colors.grey
+                    ? cs.onSurfaceVariant
                     : borderColor,
               ),
             ),
@@ -320,8 +325,8 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
                 color: (widget.highlightFacilityId != null && isHighlighted)
-                    ? Colors.white
-                    : Colors.black87,
+                    ? cs.onPrimary
+                    : cs.onSurface,
               ),
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
@@ -345,10 +350,13 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
 }
 
 class GridPainter extends CustomPainter {
+  final Color lineColor;
+  GridPainter({this.lineColor = const Color(0x1A009688)});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.teal.withValues(alpha: 0.1)
+      ..color = lineColor
       ..strokeWidth = 1;
 
     const double gridSize = 40;

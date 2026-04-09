@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/empty_state.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -59,19 +60,24 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (permission == LocationPermission.deniedForever) {
-      setState(() => _locationMessage =
-          "Location permissions are permanently denied, we cannot request permissions.");
+      setState(
+        () => _locationMessage =
+            "Location permissions are permanently denied, we cannot request permissions.",
+      );
       return;
     }
 
     try {
       Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
       if (!mounted) return;
       setState(() {
         _currentPosition = position;
-        _locationMessage = "Lat: ${position.latitude}, Long: ${position.longitude}";
+        _locationMessage =
+            "Lat: ${position.latitude}, Long: ${position.longitude}";
         _occupancyFuture = ApiService.getRealtimeOccupancy(
           latitude: position.latitude,
           longitude: position.longitude,
@@ -129,7 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpacing.lg),
                   Text(
                     greeting,
                     style: tt.headlineSmall?.copyWith(
@@ -154,25 +160,36 @@ class _HomeScreenState extends State<HomeScreen> {
                       Widget content;
 
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        content = const Center(child: CircularProgressIndicator());
+                        content = const Center(
+                          child: CircularProgressIndicator(),
+                        );
                       } else if (snapshot.hasError ||
                           !snapshot.hasData ||
                           snapshot.data!.isEmpty) {
                         content = Row(
                           children: [
-                            Icon(Icons.error_outline, size: 40,
-                                color: cs.onSurfaceVariant),
+                            Icon(
+                              Icons.error_outline,
+                              size: 40,
+                              color: cs.onSurfaceVariant,
+                            ),
                             const SizedBox(width: AppSpacing.lg),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("No Recommendation",
-                                      style: tt.titleMedium?.copyWith(
-                                          fontWeight: FontWeight.bold)),
-                                  Text("Check open hours or try again later.",
-                                      style: tt.bodySmall?.copyWith(
-                                          color: cs.onSurfaceVariant)),
+                                  Text(
+                                    "No Recommendation",
+                                    style: tt.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    "Check open hours or try again later.",
+                                    style: tt.bodySmall?.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -185,15 +202,19 @@ class _HomeScreenState extends State<HomeScreen> {
                           libraryName = 'Chi Wah Learning\nCommons';
                         }
                         final area = data['area'];
-                        final occupancyRate =
-                            (data['occupancyRate'] as num).toDouble();
+                        final occupancyRate = (data['occupancyRate'] as num)
+                            .toDouble();
                         final percentage = occupancyRate.toStringAsFixed(1);
-                        final distance =
-                            (data['distanceFromUser'] as num).toDouble();
+                        final distance = (data['distanceFromUser'] as num)
+                            .toDouble();
 
                         content = Row(
                           children: [
-                            Icon(Icons.recommend, color: cs.primary, size: 40),
+                            const Icon(
+                              Icons.star_rounded,
+                              color: Color(0xFFFFB300),
+                              size: 44,
+                            ),
                             const SizedBox(width: AppSpacing.lg),
                             Expanded(
                               child: Column(
@@ -202,18 +223,23 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Text(
                                     "Best Study Spot (${_recommendationStrategy == 'occupancyRate' ? 'Quietest' : 'Closest'})",
                                     style: tt.labelLarge?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: cs.primary),
+                                      fontWeight: FontWeight.bold,
+                                      color: cs.primary,
+                                    ),
                                   ),
                                   const SizedBox(height: AppSpacing.xs),
-                                  Text("$libraryName\n$area",
-                                      style: tt.titleMedium?.copyWith(
-                                          fontWeight: FontWeight.bold)),
+                                  Text(
+                                    "$libraryName\n$area",
+                                    style: tt.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                   const SizedBox(height: AppSpacing.xs),
                                   Text(
                                     "$percentage% Occupied • ${distance.toStringAsFixed(0)}m away",
                                     style: tt.bodySmall?.copyWith(
-                                        color: cs.onSurfaceVariant),
+                                      color: cs.onSurfaceVariant,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -227,9 +253,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           Container(
                             padding: const EdgeInsets.all(AppSpacing.lg),
                             decoration: BoxDecoration(
-                              color: cs.primaryContainer.withValues(alpha: 0.35),
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.lg),
+                              color: cs.primaryContainer.withValues(
+                                alpha: 0.35,
+                              ),
+                              borderRadius: BorderRadius.circular(AppRadius.lg),
                               border: Border.all(
                                 color: cs.primary.withValues(alpha: 0.25),
                               ),
@@ -259,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                   ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: AppSpacing.xl),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -282,27 +309,25 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: FutureBuilder<Map<String, dynamic>>(
                       future: _occupancyFuture,
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
                         } else if (snapshot.hasError) {
                           return Center(
-                            child: Text('Error: ${snapshot.error}',
-                                style: TextStyle(color: cs.error)),
+                            child: Text(
+                              'Error: ${snapshot.error}',
+                              style: TextStyle(color: cs.error),
+                            ),
                           );
                         } else if (!snapshot.hasData ||
                             (snapshot.data!['libraries'] as List).isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.info_outline,
-                                    size: 60, color: cs.onSurfaceVariant),
-                                const SizedBox(height: AppSpacing.lg),
-                                Text('No real-time data available yet.',
-                                    style: TextStyle(
-                                        color: cs.onSurfaceVariant)),
-                              ],
-                            ),
+                          return const EmptyState(
+                            icon: Icons.insights_outlined,
+                            title: 'No live data yet',
+                            message:
+                                'Real-time occupancy will appear here as soon as it\'s available.',
                           );
                         }
 
@@ -311,10 +336,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           itemCount: items.length,
                           itemBuilder: (context, index) {
                             final item = items[index];
-                            final occupancyRate =
-                                (item['occupancyRate'] as num).toDouble();
-                            final percentage =
-                                occupancyRate.toStringAsFixed(1);
+                            final occupancyRate = (item['occupancyRate'] as num)
+                                .toDouble();
+                            final percentage = occupancyRate.toStringAsFixed(1);
                             final isCrowded = occupancyRate > 70;
                             final isModerate =
                                 occupancyRate > 30 && occupancyRate <= 70;
@@ -339,7 +363,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             }
 
                             return Card(
-                              margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                              margin: const EdgeInsets.only(
+                                bottom: AppSpacing.md,
+                              ),
                               child: Padding(
                                 padding: const EdgeInsets.all(AppSpacing.lg),
                                 child: Row(
@@ -349,8 +375,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                       height: 50,
                                       decoration: BoxDecoration(
                                         color: statusColor,
-                                        borderRadius:
-                                            BorderRadius.circular(AppRadius.sm),
+                                        borderRadius: BorderRadius.circular(
+                                          AppRadius.sm,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: AppSpacing.lg),
@@ -359,11 +386,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text(libraryName,
-                                              style: tt.titleMedium),
-                                          Text(item['area'] ?? '',
-                                              style: tt.bodySmall?.copyWith(
-                                                  color: cs.onSurfaceVariant)),
+                                          Text(
+                                            libraryName,
+                                            style: tt.titleMedium,
+                                          ),
+                                          Text(
+                                            item['area'] ?? '',
+                                            style: tt.bodySmall?.copyWith(
+                                              color: cs.onSurfaceVariant,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),

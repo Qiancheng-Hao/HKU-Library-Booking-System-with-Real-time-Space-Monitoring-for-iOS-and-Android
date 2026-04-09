@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../widgets/library_map_viewer.dart';
 import '../theme/app_theme.dart';
+import '../widgets/empty_state.dart';
 
 class BookingHistoryScreen extends StatefulWidget {
   const BookingHistoryScreen({super.key});
@@ -42,8 +44,9 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
 
       final libDetails = await ApiService.getLibraryDetails(libraryId);
       final allFacilities = libDetails['facilities'] as List<dynamic>;
-      final filteredFacilities =
-          allFacilities.where((f) => f['type'] == targetType).toList();
+      final filteredFacilities = allFacilities
+          .where((f) => f['type'] == targetType)
+          .toList();
 
       if (mounted) {
         Navigator.pop(context);
@@ -70,13 +73,15 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                               Text(
                                 "Map: $targetType",
                                 style: tt.labelMedium?.copyWith(
-                                    color: cs.onSurfaceVariant,
-                                    fontWeight: FontWeight.bold),
+                                  color: cs.onSurfaceVariant,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               Text(
                                 facility['name'],
                                 style: tt.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold),
+                                  fontWeight: FontWeight.bold,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ],
@@ -93,7 +98,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                   Expanded(
                     child: filteredFacilities.isEmpty
                         ? const Center(
-                            child: Text("No facility map data available."))
+                            child: Text("No facility map data available."),
+                          )
                         : LibraryMapViewer(
                             facilities: filteredFacilities,
                             highlightFacilityId: facilityId,
@@ -108,8 +114,9 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Could not load map: $e")));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Could not load map: $e")));
       }
     }
   }
@@ -120,7 +127,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Cancel Reservation'),
         content: const Text(
-            'Are you sure you want to cancel this reservation?'),
+          'Are you sure you want to cancel this reservation?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -137,15 +145,18 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     if (confirm == true) {
       try {
         await ApiService.cancelReservation(reservationId);
+        await NotificationService.cancelReservationReminder(reservationId);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Reservation cancelled')));
+            const SnackBar(content: Text('Reservation cancelled')),
+          );
           _refresh();
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Failed to cancel: $e')));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Failed to cancel: $e')));
         }
       }
     }
@@ -162,8 +173,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
           Container(
             decoration: BoxDecoration(
               color: cs.surfaceContainerLow,
-              border:
-                  Border(bottom: BorderSide(color: cs.outlineVariant)),
+              border: Border(bottom: BorderSide(color: cs.outlineVariant)),
             ),
             child: const TabBar(
               tabs: [
@@ -178,46 +188,58 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
               future: _reservationsFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const LoadingState(message: 'Loading reservations...');
                 } else if (snapshot.hasError) {
-                  return Center(
-                      child: Text('Error: ${snapshot.error}'));
+                  return EmptyState(
+                    icon: Icons.error_outline,
+                    title: 'Could not load reservations',
+                    message: '${snapshot.error}',
+                    action: ElevatedButton(
+                      onPressed: _refresh,
+                      child: const Text('Retry'),
+                    ),
+                  );
                 }
 
                 final reservations = snapshot.data ?? [];
 
                 Widget buildList(
-                    List<String>? statusFilters, String emptyMessage) {
+                  List<String>? statusFilters,
+                  String emptyMessage,
+                ) {
                   List<dynamic> filtered;
                   if (statusFilters == null) {
                     final upcoming = reservations
-                        .where((r) => ['confirmed', 'pending']
-                            .contains(r['status']))
+                        .where(
+                          (r) => ['confirmed', 'pending'].contains(r['status']),
+                        )
                         .toList();
                     final history = reservations
-                        .where((r) => !['confirmed', 'pending']
-                            .contains(r['status']))
+                        .where(
+                          (r) =>
+                              !['confirmed', 'pending'].contains(r['status']),
+                        )
                         .toList();
                     filtered = [...upcoming, ...history];
                   } else {
                     filtered = reservations
-                        .where(
-                            (r) => statusFilters.contains(r['status']))
+                        .where((r) => statusFilters.contains(r['status']))
                         .toList();
                   }
 
                   if (filtered.isEmpty) {
-                    return Center(
-                        child: Text(emptyMessage,
-                            style: TextStyle(
-                                color: cs.onSurfaceVariant)));
+                    return EmptyState(
+                      icon: Icons.event_busy_outlined,
+                      title: emptyMessage,
+                    );
                   }
 
                   return RefreshIndicator(
                     onRefresh: _refresh,
                     child: ListView.builder(
                       padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm),
+                        vertical: AppSpacing.sm,
+                      ),
                       itemCount: filtered.length,
                       itemBuilder: (context, index) {
                         final res = filtered[index];
@@ -226,8 +248,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                         final start = res['start_time'];
                         final end = res['end_time'];
                         final status = res['status'];
-                        final isUpcoming =
-                            ['confirmed', 'pending'].contains(status);
+                        final isUpcoming = [
+                          'confirmed',
+                          'pending',
+                        ].contains(status);
 
                         final Color statusColor;
                         if (status == 'confirmed') {
@@ -240,14 +264,13 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
 
                         return Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.lg,
-                              vertical: AppSpacing.sm),
+                            horizontal: AppSpacing.lg,
+                            vertical: AppSpacing.sm,
+                          ),
                           child: Card(
                             child: InkWell(
-                              onTap:
-                                  isUpcoming ? () => _showMap(res) : null,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.lg),
+                              onTap: isUpcoming ? () => _showMap(res) : null,
+                              borderRadius: BorderRadius.circular(AppRadius.lg),
                               child: Column(
                                 children: [
                                   ListTile(
@@ -260,7 +283,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                                     title: Text(
                                       facility['name'],
                                       style: const TextStyle(
-                                          fontWeight: FontWeight.bold),
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                     subtitle: Column(
                                       crossAxisAlignment:
@@ -269,22 +293,26 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                                         Text(
                                           facility['library_name'],
                                           style: TextStyle(
-                                              color: cs.onSurface,
-                                              fontSize: 14),
+                                            color: cs.onSurface,
+                                            fontSize: 14,
+                                          ),
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text('$date | $start - $end',
-                                            style: TextStyle(
-                                                color:
-                                                    cs.onSurfaceVariant,
-                                                fontSize: 13)),
+                                        const SizedBox(height: AppSpacing.xs),
+                                        Text(
+                                          '$date | $start - $end',
+                                          style: TextStyle(
+                                            color: cs.onSurfaceVariant,
+                                            fontSize: 13,
+                                          ),
+                                        ),
                                         Row(
                                           children: [
                                             Container(
                                               width: 8,
                                               height: 8,
-                                              margin: const EdgeInsets
-                                                  .only(right: 6),
+                                              margin: const EdgeInsets.only(
+                                                right: 6,
+                                              ),
                                               decoration: BoxDecoration(
                                                 color: statusColor,
                                                 shape: BoxShape.circle,
@@ -294,22 +322,24 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                                               status,
                                               style: TextStyle(
                                                 color: statusColor,
-                                                fontWeight:
-                                                    FontWeight.w600,
+                                                fontWeight: FontWeight.w600,
                                                 fontSize: 13,
                                               ),
                                             ),
                                             if (isUpcoming) ...[
                                               const SizedBox(width: 8),
-                                              Icon(Icons.map,
-                                                  size: 14,
-                                                  color: cs.secondary),
+                                              Icon(
+                                                Icons.map,
+                                                size: 14,
+                                                color: cs.secondary,
+                                              ),
                                               const SizedBox(width: 4),
                                               Text(
                                                 "View Map",
                                                 style: TextStyle(
-                                                    color: cs.secondary,
-                                                    fontSize: 12),
+                                                  color: cs.secondary,
+                                                  fontSize: 12,
+                                                ),
                                               ),
                                             ],
                                           ],
@@ -320,16 +350,19 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                                   if (status == 'confirmed')
                                     Padding(
                                       padding: const EdgeInsets.only(
-                                          bottom: AppSpacing.sm),
+                                        bottom: AppSpacing.sm,
+                                      ),
                                       child: Center(
                                         child: TextButton(
-                                          onPressed: () =>
-                                              _showCancelDialog(
-                                                  res['id'].toString()),
+                                          onPressed: () => _showCancelDialog(
+                                            res['id'].toString(),
+                                          ),
                                           style: TextButton.styleFrom(
-                                              foregroundColor: cs.error),
+                                            foregroundColor: cs.error,
+                                          ),
                                           child: const Text(
-                                              'Cancel Reservation'),
+                                            'Cancel Reservation',
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -346,10 +379,15 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                 return TabBarView(
                   children: [
                     buildList(null, "No reservations found."),
-                    buildList(['confirmed', 'pending'],
-                        "No upcoming reservations."),
-                    buildList(['finished', 'claimed', 'unclaimed'],
-                        "No past reservations."),
+                    buildList([
+                      'confirmed',
+                      'pending',
+                    ], "No upcoming reservations."),
+                    buildList([
+                      'finished',
+                      'claimed',
+                      'unclaimed',
+                    ], "No past reservations."),
                   ],
                 );
               },

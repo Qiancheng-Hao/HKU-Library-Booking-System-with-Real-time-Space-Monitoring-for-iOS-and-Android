@@ -64,11 +64,12 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
             // Header
             Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
               decoration: BoxDecoration(
                 color: cs.surfaceContainerLow,
-                border: Border(
-                    bottom: BorderSide(color: cs.outlineVariant)),
+                border: Border(bottom: BorderSide(color: cs.outlineVariant)),
               ),
               child: Row(
                 children: [
@@ -100,8 +101,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
               Expanded(child: _buildMessageList(provider)),
               if (provider.awaitingConfirmation &&
                   provider.pendingConfirmation != null)
-                _buildConfirmationCard(
-                    provider, provider.pendingConfirmation!),
+                _buildConfirmationCard(provider, provider.pendingConfirmation!),
               _buildInputBar(provider),
             ],
           ],
@@ -133,8 +133,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
     if (provider.messages.isEmpty && provider.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    final itemCount =
-        provider.messages.length + (provider.isLoading ? 1 : 0);
+    final itemCount = provider.messages.length + (provider.isLoading ? 1 : 0);
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -155,7 +154,9 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
       child: Container(
         margin: const EdgeInsets.only(bottom: AppSpacing.md),
         padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(18),
@@ -206,8 +207,9 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Row(
-        mainAxisAlignment:
-            msg.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: msg.isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!msg.isUser) ...[
@@ -219,9 +221,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
               child: Icon(
                 msg.isResult ? Icons.check : Icons.auto_awesome_rounded,
                 size: 16,
-                color: msg.isResult
-                    ? Colors.white
-                    : cs.onPrimaryContainer,
+                color: msg.isResult ? Colors.white : cs.onPrimaryContainer,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -234,7 +234,9 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
                   decoration: BoxDecoration(
                     color: bubbleColor,
                     borderRadius: BorderRadius.only(
@@ -249,13 +251,55 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                     ),
                     border: msg.isResult
                         ? Border.all(
-                            color: AppColors.statusAvailable
-                                .withValues(alpha: 0.4))
+                            color: AppColors.statusAvailable.withValues(
+                              alpha: 0.4,
+                            ),
+                          )
                         : null,
                   ),
-                  child: Text(
-                    msg.text,
-                    style: tt.bodyMedium?.copyWith(color: textColor),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (msg.isResult) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.statusAvailable.withValues(
+                              alpha: 0.18,
+                            ),
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.check_circle,
+                                size: 12,
+                                color: AppColors.statusAvailable,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'SUCCESS',
+                                style: tt.labelSmall?.copyWith(
+                                  color: AppColors.statusAvailable,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                      ],
+                      Text(
+                        msg.text,
+                        style: tt.bodyMedium?.copyWith(color: textColor),
+                      ),
+                    ],
                   ),
                 ),
                 if (showSuggestionChips) _buildSuggestionChips(msg.data!),
@@ -296,9 +340,13 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
               (option) => GestureDetector(
                 onTap: () => _sendMessage(option),
                 child: Chip(
-                  label: Text(option,
-                      style: TextStyle(
-                          fontSize: 12, color: cs.onSecondaryContainer)),
+                  label: Text(
+                    option,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSecondaryContainer,
+                    ),
+                  ),
                   backgroundColor: cs.secondaryContainer,
                   side: BorderSide.none,
                   padding: EdgeInsets.zero,
@@ -327,8 +375,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
           .toLowerCase()
           .compareTo(matchB.group(1)!.toLowerCase());
       if (prefixCompare != 0) return prefixCompare;
-      return int.parse(matchA.group(2)!)
-          .compareTo(int.parse(matchB.group(2)!));
+      return int.parse(matchA.group(2)!).compareTo(int.parse(matchB.group(2)!));
     }
     return tokenA.toLowerCase().compareTo(tokenB.toLowerCase());
   }
@@ -352,7 +399,11 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
 
     return Container(
       margin: const EdgeInsets.fromLTRB(
-          AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: cs.primaryContainer.withValues(alpha: 0.3),
@@ -370,7 +421,9 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
               Text(
                 'Booking Preview',
                 style: tt.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold, color: cs.primary),
+                  fontWeight: FontWeight.bold,
+                  color: cs.primary,
+                ),
               ),
             ],
           ),
@@ -381,9 +434,10 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
             _previewRow(Icons.access_time, timeRanges.join(', ')),
           if (candidateRooms.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text('Booking facility:',
-                style: tt.labelSmall?.copyWith(
-                    color: cs.onSurfaceVariant)),
+            Text(
+              'Booking facility:',
+              style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
             const SizedBox(height: 4),
             Wrap(
               spacing: 6,
@@ -391,15 +445,17 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
               children: candidateRooms
                   .map(
                     (room) => Chip(
-                      label: Text(room,
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSecondaryContainer)),
+                      label: Text(
+                        room,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSecondaryContainer,
+                        ),
+                      ),
                       backgroundColor: cs.secondaryContainer,
                       side: BorderSide.none,
                       padding: EdgeInsets.zero,
-                      materialTapTargetSize:
-                          MaterialTapTargetSize.shrinkWrap,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   )
                   .toList(),
@@ -417,8 +473,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () =>
-                      provider.confirmBooking(candidateRooms),
+                  onPressed: () => provider.confirmBooking(candidateRooms),
                   child: const Text('Confirm'),
                 ),
               ),
@@ -438,8 +493,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
         children: [
           Icon(icon, size: 14, color: cs.primary),
           const SizedBox(width: 6),
-          Expanded(
-              child: Text(value, style: tt.bodySmall)),
+          Expanded(child: Text(value, style: tt.bodySmall)),
         ],
       ),
     );
@@ -449,7 +503,11 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
     final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.lg),
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        AppSpacing.lg,
+      ),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
         border: Border(top: BorderSide(color: cs.outlineVariant)),
