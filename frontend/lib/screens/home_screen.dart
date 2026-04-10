@@ -203,7 +203,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         }
                         final area = data['area'];
                         final occupancyRate = (data['occupancyRate'] as num)
-                            .toDouble();
+                            .toDouble()
+                            .clamp(0.0, 100.0);
                         final percentage = occupancyRate.toStringAsFixed(1);
                         final distance = (data['distanceFromUser'] as num)
                             .toDouble();
@@ -337,7 +338,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           itemBuilder: (context, index) {
                             final item = items[index];
                             final occupancyRate = (item['occupancyRate'] as num)
-                                .toDouble();
+                                .toDouble()
+                                .clamp(0.0, 100.0);
                             final percentage = occupancyRate.toStringAsFixed(1);
                             final isCrowded = occupancyRate > 70;
                             final isModerate =
