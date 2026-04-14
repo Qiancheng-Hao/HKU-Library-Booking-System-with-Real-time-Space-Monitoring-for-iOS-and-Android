@@ -15,8 +15,7 @@ if backend_path not in sys.path:
 load_dotenv(os.path.join(backend_path, '.env'))
 
 from app.core.database import SessionLocal
-from app.services.reservation_service import ReservationService
-from app.models import Facility, Library, Reservation, ReservationStatus, User
+from app.models import Facility, Library, Reservation
 from sqlalchemy import select
 
 class OptimizedBookingSystem:
@@ -229,108 +228,3 @@ class OptimizedBookingSystem:
         except Exception as e:
             return {"success": False, "message": f"System error during availability check: {str(e)}"}
 
-    def execute_booking(self, rooms: List[str]) -> Dict[str, Any]:
-        """
-        Execute the booking by creating records in the database.
-        Args: 
-            rooms: A list of room names corresponding to the requested sessions (in the same order).
-        Return:
-            a dictionary of results with detailed failure reasons.
-        """
-        db = SessionLocal()
-        service = ReservationService(db)
-        
-        # Resolve library_id from legacy_code in database.
-        library_id = self._get_library_id_by_legacy_code(db, self.location_code)
-        if not library_id:
-            return {"success": False, "message": f"Unknown library code: {self.location_code}"}
-            
-        # Parse date
-        try:
-            booking_date = datetime.strptime(self.date_str, "%Y%m%d").date()
-        except ValueError:
-            return {"success": False, "message": "Invalid date format. Expected YYYYMMDD."}
-
-        self.successful_bookings = {}
-        booked_time_ranges = {}
-        failure_reasons = {}
-        
-        # Iterate through requested sessions
-        for session_code in self.sessions:
-            start_time, end_time = self._parse_session(session_code)
-            session_success = False
-            session_errors = []
-            
-            # Try rooms in order until one succeeds for this session
-            for room_name in rooms:
-                facility_id = self._get_facility_id(db, library_id, room_name)
-                
-                if not facility_id:
-                    session_errors.append(f"{room_name}: Facility not found in this library.")
-                    continue
-                
-                try:
-                    # Perform validations using the backend service
-                    facility = service.get_facility(facility_id)
-                    effective_slot = self._clip_to_facility_hours(
-                        start_time,
-                        end_time,
-                        facility.open_time,
-                        facility.close_time,
-                    )
-                    if effective_slot is None:
-                        session_errors.append(
-                            f"{room_name}: Requested time is outside opening hours ({self._format_time(facility.open_time)}-{self._format_time(facility.close_time)})."
-                        )
-                        continue
-                    effective_start, effective_end = effective_slot
-
-                    service.enforce_lead_time(booking_date)
-                    service.ensure_slot_within_facility_hours(
-                        facility,
-                        booking_date,
-                        effective_start,
-                        effective_end,
-                    )
-                    service.ensure_slot_available(facility_id, booking_date, effective_start, effective_end)
-                    service.ensure_user_has_no_overlap(self.user_id, booking_date, effective_start, effective_end)
-                    
-                    # If we reached here, the slot is available
-                    reservation = Reservation(
-                        user_id=self.user_id,
-                        facility_id=facility_id,
-                        reservation_date=booking_date,
-                        start_time=effective_start,
-                        end_time=effective_end,
-                        status=ReservationStatus.confirmed,
-                        notes="Booked via AI Agent"
-                    )
-                    
-                    db.add(reservation)
-                    db.commit()
-                    db.refresh(reservation)
-                    
-                    self.successful_bookings[session_code] = room_name
-                    booked_time_ranges[session_code] = f"{self._format_time(effective_start)}-{self._format_time(effective_end)}"
-                    session_success = True
-                    break # Success for this session, move to next
-                    
-                except Exception as e:
-                    # Extract error message (handle FastAPI HTTPException if needed)
-                    err_msg = getattr(e, 'detail', str(e))
-                    session_errors.append(f"{room_name}: {err_msg}")
-                    db.rollback()
-                    continue
-            
-            if not session_success:
-                failure_reasons[session_code] = session_errors
-
-        db.close()
-        return {
-            "success": len(self.successful_bookings) > 0,
-            "bookings": self.successful_bookings,
-            "booked_time_ranges": booked_time_ranges,
-            "failures": failure_reasons,
-            "total_requested": len(self.sessions),
-            "total_successful": len(self.successful_bookings)
-        }

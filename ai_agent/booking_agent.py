@@ -17,7 +17,6 @@ from facility_mapping import (
 )
 import threading
 import time
-import asyncio
 import os
 from dotenv import load_dotenv
 
@@ -513,42 +512,11 @@ class BookingAgent:
         return "All required information has been collected. Ready to proceed with booking."
 
     def _execute_booking(self) -> str:
-        """Execute the booking process directly in the database."""
-        if not self.user_id:
-            return "Error: User identity not verified. Please log in again."
+        """Signal that all booking details are collected and ready for confirmation."""
         missing = [k for k, v in self.collected_info.items() if v is None]
         if missing:
             return f"Cannot execute booking. Missing information: {', '.join(missing)}"
-        try:
-            booking_system = OptimizedBookingSystem(
-                user_id=self.user_id,
-                location=self.collected_info["location"],
-                type_code=self.collected_info["type"],
-                date_str=self.collected_info["date"],
-                sessions=self.collected_info["sessions"]
-            )
-            result = booking_system.execute_booking(self.collected_info["rooms"])
-            msg = ""
-            if result["total_successful"] > 0:
-                msg += f"Booking successful! {result['total_successful']}/{result['total_requested']} sessions booked.\n\n"
-                booked_time_ranges = result.get("booked_time_ranges", {})
-                for session, room in result["bookings"].items():
-                    time_str = booked_time_ranges.get(
-                        session,
-                        f"{session[:2]}:{session[2:4]}-{session[4:6]}:{session[6:8]}",
-                    )
-                    msg += f"- {room}: {time_str}\n"
-            if result["total_successful"] < result["total_requested"]:
-                if msg:
-                    msg += "\nSome sessions could not be booked:\n"
-                else:
-                    msg += "Booking failed for all requested sessions:\n"
-                for session, errors in result.get("failures", {}).items():
-                    time_str = f"{session[:2]}:{session[2:4]}-{session[4:6]}:{session[6:8]}"
-                    msg += f"- {time_str}:\n  * " + "\n  * ".join(errors) + "\n"
-            return msg
-        except Exception as e:
-            return f"A system error occurred during booking: {str(e)}. Please try again later or contact support."
+        return "Booking details are ready. Please confirm through the backend service."
 
     async def chat(self, user_message: str, thread=None) -> str:
         """Process a user message and return the agent's response."""
@@ -575,28 +543,6 @@ class BookingAgent:
         )
         return response.text or ""
 
-    async def start_conversation(self):
-        """Start an interactive conversation session with the user."""
-        if self.agent is None:
-            await self.initialize_agent()
-        assert self.agent is not None
-
-        thread = self.agent.create_session()
-        print("Booking Agent Initializing ....\n")
-
-        greeting = await self.chat("Hello, I need to book a study room.", thread=thread)
-        print(f"Booking Agent: {greeting}\n")
-
-        while True:
-            user_input = input("You: ").strip()
-            if user_input.lower() in ['quit', 'exit', 'bye']:
-                print("Booking Agent: Goodbye! Feel free to come back if you need to book again.")
-                break
-            if not user_input:
-                continue
-            response = await self.chat(user_input, thread=thread)
-            print(f"Booking Agent: {response}\n")
-
     def reset(self):
         """Reset all collected information."""
         self.collected_info = {
@@ -612,13 +558,3 @@ class BookingAgent:
         return self.collected_info.copy()
 
 
-async def main():
-    """Example usage of the BookingAgent."""
-    api_key = os.environ.get("AI_API_KEY", "")
-    test_user_id = "00000000-0000-0000-0000-000000000001"
-    agent = BookingAgent(api_key=api_key, user_id=test_user_id)
-    await agent.start_conversation()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
