@@ -11,7 +11,6 @@ import '../providers/auth_provider.dart';
 class ApiService {
   static const _storage = FlutterSecureStorage();
 
-  // Automatically use 10.0.2.2 for Android Emulator, localhost for iOS/Web
   static String get baseUrl {
     if (kIsWeb) return 'http://localhost:8000';
     if (Platform.isAndroid) return 'http://10.0.2.2:8000';

@@ -1,7 +1,9 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/ai_session_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ai_map_selector.dart';
 
 class AiAgentScreen extends StatefulWidget {
   const AiAgentScreen({super.key});
@@ -13,6 +15,9 @@ class AiAgentScreen extends StatefulWidget {
 class _AiAgentScreenState extends State<AiAgentScreen> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _inputFocusNode = FocusNode();
+  final Set<ChatMessage> _consumedMapSuggestions = {};
+  final Set<ChatMessage> _expiredMapSuggestions = {};
 
   @override
   void initState() {
@@ -29,6 +34,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
   void dispose() {
     _inputController.dispose();
     _scrollController.dispose();
+    _inputFocusNode.dispose();
     super.dispose();
   }
 
@@ -46,9 +52,42 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
 
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty) return;
+    final provider = context.read<AiSessionProvider>();
+    if (provider.isLoading) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please wait for the reply...'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        for (final message in provider.messages) {
+          if (_hasMapShortcut(message) &&
+              !_consumedMapSuggestions.contains(message)) {
+            _expiredMapSuggestions.add(message);
+          }
+        }
+      });
+    }
     _inputController.clear();
-    await context.read<AiSessionProvider>().sendMessage(text);
+    _inputFocusNode.requestFocus();
+    await provider.sendMessage(text);
     _scrollToBottom();
+  }
+
+  bool _hasMapShortcut(ChatMessage message) {
+    if (message.isUser || message.data == null) return false;
+    final readyForConfirmation =
+        (message.data?['readyForConfirmation'] as bool?) ?? false;
+    if (readyForConfirmation) return false;
+
+    final opts = message.data?['suggestedOptions'] as Map<String, dynamic>?;
+    final rooms = (opts?['rooms'] as List<dynamic>?) ?? const [];
+    return rooms.isNotEmpty;
   }
 
   @override
@@ -89,7 +128,13 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                     tooltip: 'New conversation',
                     onPressed: provider.isLoading
                         ? null
-                        : () => provider.resetSession(),
+                        : () {
+                            setState(() {
+                              _consumedMapSuggestions.clear();
+                              _expiredMapSuggestions.clear();
+                            });
+                            provider.resetSession();
+                          },
                   ),
                 ],
               ),
@@ -161,23 +206,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
           color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(18),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(
-            3,
-            (i) => Padding(
-              padding: EdgeInsets.only(left: i > 0 ? 4 : 0),
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: cs.onSurfaceVariant,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ),
-        ),
+        child: _BouncingDots(color: cs.onSurfaceVariant),
       ),
     );
   }
@@ -186,16 +215,59 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
+    if (msg.isDivider) {
+      return Container(
+        margin: const EdgeInsets.symmetric(
+          vertical: AppSpacing.md,
+          horizontal: AppSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Divider(
+                color: cs.outlineVariant.withValues(alpha: 0.8),
+                height: 1,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Text(
+                msg.text,
+                style: tt.labelMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Divider(
+                color: cs.outlineVariant.withValues(alpha: 0.8),
+                height: 1,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final readyForConfirmation =
         (msg.data?['readyForConfirmation'] as bool?) ?? false;
     final showSuggestionChips =
         !msg.isUser && msg.data != null && !readyForConfirmation;
+
+    final bool resultSuccess =
+        msg.isResult && ((msg.data?['success'] as bool?) ?? true);
+    final bool resultFailure = msg.isResult && !resultSuccess;
 
     final Color bubbleColor;
     final Color textColor;
     if (msg.isUser) {
       bubbleColor = cs.primary;
       textColor = cs.onPrimary;
+    } else if (resultFailure) {
+      bubbleColor = cs.errorContainer.withValues(alpha: 0.35);
+      textColor = cs.onSurface;
     } else if (msg.isResult) {
       bubbleColor = AppColors.statusAvailable.withValues(alpha: 0.12);
       textColor = cs.onSurface;
@@ -203,6 +275,10 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
       bubbleColor = cs.surfaceContainerHigh;
       textColor = cs.onSurface;
     }
+
+    final failedReservations = msg.isResult
+        ? (msg.data?['failedReservations'] as List<dynamic>? ?? [])
+        : <dynamic>[];
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -215,13 +291,21 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
           if (!msg.isUser) ...[
             CircleAvatar(
               radius: 16,
-              backgroundColor: msg.isResult
+              backgroundColor: resultFailure
+                  ? cs.error
+                  : msg.isResult
                   ? AppColors.statusAvailable
                   : cs.primaryContainer,
               child: Icon(
-                msg.isResult ? Icons.check : Icons.auto_awesome_rounded,
+                resultFailure
+                    ? Icons.close
+                    : msg.isResult
+                    ? Icons.check
+                    : Icons.auto_awesome_rounded,
                 size: 16,
-                color: msg.isResult ? Colors.white : cs.onPrimaryContainer,
+                color: (resultFailure || msg.isResult)
+                    ? Colors.white
+                    : cs.onPrimaryContainer,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -251,9 +335,11 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                     ),
                     border: msg.isResult
                         ? Border.all(
-                            color: AppColors.statusAvailable.withValues(
-                              alpha: 0.4,
-                            ),
+                            color: resultFailure
+                                ? cs.error.withValues(alpha: 0.4)
+                                : AppColors.statusAvailable.withValues(
+                                    alpha: 0.4,
+                                  ),
                           )
                         : null,
                   ),
@@ -268,24 +354,32 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.statusAvailable.withValues(
-                              alpha: 0.18,
-                            ),
+                            color: resultFailure
+                                ? cs.error.withValues(alpha: 0.15)
+                                : AppColors.statusAvailable.withValues(
+                                    alpha: 0.18,
+                                  ),
                             borderRadius: BorderRadius.circular(AppRadius.pill),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(
-                                Icons.check_circle,
+                              Icon(
+                                resultFailure
+                                    ? Icons.cancel
+                                    : Icons.check_circle,
                                 size: 12,
-                                color: AppColors.statusAvailable,
+                                color: resultFailure
+                                    ? cs.error
+                                    : AppColors.statusAvailable,
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                'SUCCESS',
+                                resultFailure ? 'FAILED' : 'SUCCESS',
                                 style: tt.labelSmall?.copyWith(
-                                  color: AppColors.statusAvailable,
+                                  color: resultFailure
+                                      ? cs.error
+                                      : AppColors.statusAvailable,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 0.5,
                                 ),
@@ -299,10 +393,49 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                         msg.text,
                         style: tt.bodyMedium?.copyWith(color: textColor),
                       ),
+                      if (failedReservations.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        ...failedReservations.map((f) {
+                          final item = f as Map<String, dynamic>;
+                          final session = item['session'] as String? ?? '';
+                          final room = item['room'] as String? ?? '';
+                          final reason = item['reason'] as String? ?? '';
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  size: 13,
+                                  color: cs.error,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    '${session.isNotEmpty ? '$session ' : ''}${room.isNotEmpty ? '($room): ' : ''}$reason',
+                                    style: tt.bodySmall?.copyWith(
+                                      color: cs.error,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
                     ],
                   ),
                 ),
-                if (showSuggestionChips) _buildSuggestionChips(msg.data!),
+                if (showSuggestionChips)
+                  _buildSuggestionChips(
+                    msg,
+                    msg.data!,
+                    disableMapShortcut:
+                        _consumedMapSuggestions.contains(msg) ||
+                        _expiredMapSuggestions.contains(msg),
+                    selectedOnMap: _consumedMapSuggestions.contains(msg),
+                  ),
               ],
             ),
           ),
@@ -312,10 +445,18 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
     );
   }
 
-  Widget _buildSuggestionChips(Map<String, dynamic> data) {
+  Widget _buildSuggestionChips(
+    ChatMessage message,
+    Map<String, dynamic> data, {
+    bool disableMapShortcut = false,
+    bool selectedOnMap = false,
+  }) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     final opts = data['suggestedOptions'] as Map<String, dynamic>?;
     if (opts == null) return const SizedBox.shrink();
+    final collectedInfo = data['collectedInfo'] as Map<String, dynamic>?;
+
     final locations =
         (opts['locations'] as List<dynamic>?)?.cast<String>().toList() ?? [];
     final roomTypes =
@@ -327,34 +468,147 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
     roomTypes.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     rooms.sort(_naturalOptionCompare);
 
-    final all = [...locations, ...roomTypes, ...rooms];
-    if (all.isEmpty) return const SizedBox.shrink();
+    String? locationHint = locations.isNotEmpty ? locations.first : null;
+    if (locationHint == null) {
+      final preview = data['bookingPreview'] as Map<String, dynamic>?;
+      locationHint = preview?['library'] as String?;
+    }
+    final roomTypeCode = collectedInfo?['room_type_code'] as String?;
+    final roomTypeLabel =
+        collectedInfo?['room_type'] as String? ??
+        (roomTypes.length == 1 ? roomTypes.first : null);
+
+    final nonRoomOptions = [...locations, ...roomTypes];
+    if (nonRoomOptions.isEmpty && rooms.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 4,
-        children: all
-            .map(
-              (option) => GestureDetector(
-                onTap: () => _sendMessage(option),
-                child: Chip(
-                  label: Text(
-                    option,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: cs.onSecondaryContainer,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (nonRoomOptions.isNotEmpty)
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: nonRoomOptions
+                  .map(
+                    (option) => GestureDetector(
+                      onTap: () => _sendMessage(option),
+                      child: Chip(
+                        label: Text(
+                          option,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSecondaryContainer,
+                          ),
+                        ),
+                        backgroundColor: cs.secondaryContainer,
+                        side: BorderSide.none,
+                        padding: EdgeInsets.zero,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
                     ),
+                  )
+                  .toList(),
+            ),
+
+          if (rooms.isNotEmpty) ...[
+            if (nonRoomOptions.isNotEmpty) const SizedBox(height: 8),
+            GestureDetector(
+              onTap: disableMapShortcut
+                  ? null
+                  : () => _openMapSelector(
+                      sourceMessage: message,
+                      locationHint: locationHint,
+                      rooms: rooms,
+                      roomTypeCode: roomTypeCode,
+                      roomTypeLabel: roomTypeLabel,
+                    ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: disableMapShortcut
+                      ? cs.surfaceContainerHigh
+                      : cs.primaryContainer.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  border: Border.all(
+                    color: disableMapShortcut
+                        ? cs.outlineVariant
+                        : cs.primary.withValues(alpha: 0.4),
                   ),
-                  backgroundColor: cs.secondaryContainer,
-                  side: BorderSide.none,
-                  padding: EdgeInsets.zero,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.map_outlined,
+                      size: 16,
+                      color: disableMapShortcut
+                          ? cs.onSurfaceVariant
+                          : cs.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      disableMapShortcut
+                          ? (selectedOnMap
+                                ? 'Selected on Map'
+                                : 'Map Options Expired')
+                          : 'View on Map  (${rooms.length} available)',
+                      style: tt.bodySmall?.copyWith(
+                        color: disableMapShortcut
+                            ? cs.onSurfaceVariant
+                            : cs.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      disableMapShortcut
+                          ? (selectedOnMap ? Icons.check_circle : Icons.block)
+                          : Icons.chevron_right,
+                      size: disableMapShortcut ? 14 : 16,
+                      color: disableMapShortcut
+                          ? cs.onSurfaceVariant
+                          : cs.primary.withValues(alpha: 0.7),
+                    ),
+                  ],
                 ),
               ),
-            )
-            .toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _openMapSelector({
+    required ChatMessage sourceMessage,
+    required String? locationHint,
+    required List<String> rooms,
+    String? roomTypeCode,
+    String? roomTypeLabel,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AiMapSelectorSheet(
+        locationHint: locationHint,
+        availableRoomNames: rooms,
+        roomTypeCode: roomTypeCode,
+        roomTypeLabel: roomTypeLabel,
+        onConfirm: (selected) {
+          if (mounted) {
+            setState(() {
+              _consumedMapSuggestions.add(sourceMessage);
+            });
+          }
+          final message = selected.join(', ');
+          _sendMessage(message);
+        },
       ),
     );
   }
@@ -517,8 +771,9 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
           Expanded(
             child: TextField(
               controller: _inputController,
+              focusNode: _inputFocusNode,
               onSubmitted: _sendMessage,
-              enabled: !provider.isLoading && provider.hasSession,
+              enabled: provider.hasSession,
               textInputAction: TextInputAction.send,
               decoration: InputDecoration(
                 hintText: 'Type your request...',
@@ -540,4 +795,80 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
       ),
     );
   }
+}
+
+class _BouncingDots extends StatefulWidget {
+  final Color color;
+  const _BouncingDots({required this.color});
+
+  @override
+  State<_BouncingDots> createState() => _BouncingDotsState();
+}
+
+class _BouncingDotsState extends State<_BouncingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) => CustomPaint(
+          size: const Size(36, 16),
+          painter: _DotsPainter(
+            progress: _controller.value,
+            color: widget.color,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DotsPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  const _DotsPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    const dotRadius = 4.0;
+    const spacing = 5.0;
+    const amplitude = 5.0;
+    const totalWidth = 3 * dotRadius * 2 + 2 * spacing;
+    final startX = (size.width - totalWidth) / 2 + dotRadius;
+    final centerY = size.height / 2;
+
+    for (int i = 0; i < 3; i++) {
+      final phase = (progress - i / 3.0) % 1.0;
+      final dy = -math.sin(phase * 2 * math.pi).abs() * amplitude;
+      final cx = startX + i * (dotRadius * 2 + spacing);
+      canvas.drawCircle(Offset(cx, centerY + dy), dotRadius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DotsPainter old) =>
+      old.progress != progress || old.color != color;
 }

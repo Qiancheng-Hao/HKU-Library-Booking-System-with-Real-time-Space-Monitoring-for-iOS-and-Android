@@ -5,6 +5,9 @@ class LibraryMapViewer extends StatelessWidget {
   final int? highlightFacilityId;
   final Function(dynamic facility)? onFacilityTap;
   final int? initialFloor;
+  final Set<String>? availableFacilityNames;
+  final Set<String>? selectedFacilityNames;
+  final Function(String markerLabel)? onFacilityNameTap;
 
   const LibraryMapViewer({
     super.key,
@@ -12,6 +15,9 @@ class LibraryMapViewer extends StatelessWidget {
     this.highlightFacilityId,
     this.onFacilityTap,
     this.initialFloor,
+    this.availableFacilityNames,
+    this.selectedFacilityNames,
+    this.onFacilityNameTap,
   });
 
   @override
@@ -22,10 +28,28 @@ class LibraryMapViewer extends StatelessWidget {
     }
     final sortedFloors = floors.toList()..sort();
 
-    int selectedFloor = 1;
-    if (sortedFloors.isNotEmpty) selectedFloor = sortedFloors.first;
+    int selectedFloor = sortedFloors.isNotEmpty ? sortedFloors.first : 1;
 
-    if (highlightFacilityId != null) {
+    if (availableFacilityNames != null && availableFacilityNames!.isNotEmpty) {
+      final Map<int, int> floorAvailableCount = {};
+      for (var item in facilities) {
+        final floor = item['floor'] as int? ?? 1;
+        final label = _markerLabel(item['name'] as String? ?? '');
+        final name = (item['name'] as String? ?? '').toLowerCase();
+        final isAvailable = availableFacilityNames!.any(
+          (n) =>
+              n.toLowerCase() == label.toLowerCase() || n.toLowerCase() == name,
+        );
+        if (isAvailable) {
+          floorAvailableCount[floor] = (floorAvailableCount[floor] ?? 0) + 1;
+        }
+      }
+      if (floorAvailableCount.isNotEmpty) {
+        selectedFloor = floorAvailableCount.entries
+            .reduce((a, b) => a.value >= b.value ? a : b)
+            .key;
+      }
+    } else if (highlightFacilityId != null) {
       final highlightItem = facilities.firstWhere(
         (f) => f['id'] == highlightFacilityId,
         orElse: () => null,
@@ -43,7 +67,16 @@ class LibraryMapViewer extends StatelessWidget {
       sortedFloors: sortedFloors,
       highlightFacilityId: highlightFacilityId,
       onFacilityTap: onFacilityTap,
+      availableFacilityNames: availableFacilityNames,
+      selectedFacilityNames: selectedFacilityNames,
+      onFacilityNameTap: onFacilityNameTap,
     );
+  }
+
+  static String _markerLabel(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '';
+    return trimmed.split(RegExp(r'\s+')).last;
   }
 }
 
@@ -53,6 +86,9 @@ class _LibraryMapContent extends StatefulWidget {
   final List<int> sortedFloors;
   final int? highlightFacilityId;
   final Function(dynamic facility)? onFacilityTap;
+  final Set<String>? availableFacilityNames;
+  final Set<String>? selectedFacilityNames;
+  final Function(String markerLabel)? onFacilityNameTap;
 
   const _LibraryMapContent({
     required this.facilities,
@@ -60,6 +96,9 @@ class _LibraryMapContent extends StatefulWidget {
     required this.sortedFloors,
     this.highlightFacilityId,
     this.onFacilityTap,
+    this.availableFacilityNames,
+    this.selectedFacilityNames,
+    this.onFacilityNameTap,
   });
 
   @override
@@ -81,6 +120,32 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
     if (value is int) return value.toDouble();
     if (value is num) return value.toDouble();
     return fallback;
+  }
+
+  String _getMarkerLabel(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '';
+    return trimmed.split(RegExp(r'\s+')).last;
+  }
+
+  bool _isFacilityAvailable(dynamic item) {
+    final names = widget.availableFacilityNames;
+    if (names == null) return true;
+    final fullName = (item['name'] as String? ?? '').toLowerCase();
+    final label = _getMarkerLabel(item['name'] as String? ?? '').toLowerCase();
+    return names.any(
+      (n) => n.toLowerCase() == label || n.toLowerCase() == fullName,
+    );
+  }
+
+  bool _isFacilitySelected(dynamic item) {
+    final names = widget.selectedFacilityNames;
+    if (names == null) return false;
+    final fullName = (item['name'] as String? ?? '').toLowerCase();
+    final label = _getMarkerLabel(item['name'] as String? ?? '').toLowerCase();
+    return names.any(
+      (n) => n.toLowerCase() == label || n.toLowerCase() == fullName,
+    );
   }
 
   @override
@@ -115,9 +180,7 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
                   label: Text("Floor $floor"),
                   selected: isSelected,
                   onSelected: (selected) {
-                    if (selected) {
-                      setState(() => _selectedFloor = floor);
-                    }
+                    if (selected) setState(() => _selectedFloor = floor);
                   },
                   selectedColor: cs.primaryContainer,
                   backgroundColor: cs.surfaceContainerHigh,
@@ -148,13 +211,8 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
                     final y = _toDouble(item['y_coordinate']);
                     final w = _toDouble(item['width']);
                     final h = _toDouble(item['height']);
-
-                    if (x + w > mapBaseWidth) {
-                      mapBaseWidth = x + w;
-                    }
-                    if (y + h > mapBaseHeight) {
-                      mapBaseHeight = y + h;
-                    }
+                    if (x + w > mapBaseWidth) mapBaseWidth = x + w;
+                    if (y + h > mapBaseHeight) mapBaseHeight = y + h;
                   }
 
                   mapBaseWidth *= 1.05;
@@ -209,18 +267,38 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
                               final isHighlighted =
                                   widget.highlightFacilityId == item['id'];
 
+                              final isAvailable =
+                                  widget.availableFacilityNames != null
+                                  ? _isFacilityAvailable(item)
+                                  : true;
+                              final isSelected = _isFacilitySelected(item);
+
+                              VoidCallback? onTap;
+                              if (widget.availableFacilityNames != null) {
+                                if (isAvailable &&
+                                    widget.onFacilityNameTap != null) {
+                                  final label = _getMarkerLabel(
+                                    item['name'] as String? ?? '',
+                                  );
+                                  onTap = () =>
+                                      widget.onFacilityNameTap!(label);
+                                }
+                              } else if (widget.onFacilityTap != null) {
+                                onTap = () => widget.onFacilityTap!(item);
+                              }
+
                               return Positioned(
                                 left: left,
                                 top: top,
                                 child: GestureDetector(
-                                  onTap: widget.onFacilityTap != null
-                                      ? () => widget.onFacilityTap!(item)
-                                      : null,
+                                  onTap: onTap,
                                   child: _buildFacilityMarker(
                                     item,
                                     pixelWidth,
                                     pixelHeight,
                                     isHighlighted,
+                                    isAvailable: isAvailable,
+                                    isSelected: isSelected,
                                   ),
                                 ),
                               );
@@ -243,12 +321,14 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
     dynamic item,
     double? pixelWidth,
     double? pixelHeight,
-    bool isHighlighted,
-  ) {
+    bool isHighlighted, {
+    bool isAvailable = true,
+    bool isSelected = false,
+  }) {
     final cs = Theme.of(context).colorScheme;
     final type = (item['type'] as String? ?? '').toLowerCase();
     final name = item['name'] as String? ?? '';
-    String identifier = _getMarkerLabel(name);
+    final String identifier = _getMarkerLabel(name);
 
     double defaultWidth = 30;
     double defaultHeight = 30;
@@ -272,17 +352,35 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
       icon = Icons.chair;
     }
 
-    // Highlighting Logic
     Color fillColor;
     Color borderColor;
+    Color textColor = cs.onSurface;
+    final mutedFillColor = cs.onSurface.withValues(alpha: 0.06);
+    final mutedBorderColor = cs.onSurface.withValues(alpha: 0.2);
 
-    if (widget.highlightFacilityId != null) {
+    if (widget.availableFacilityNames != null) {
+      // AI-selector mode
+      if (isAvailable && isSelected) {
+        fillColor = baseColor.withValues(alpha: 0.9);
+        borderColor = baseColor;
+        textColor = Colors.white;
+      } else if (isAvailable) {
+        fillColor = baseColor.withValues(alpha: 0.22);
+        borderColor = baseColor;
+        textColor = cs.onSurface;
+      } else {
+        fillColor = mutedFillColor;
+        borderColor = mutedBorderColor;
+        textColor = cs.onSurface;
+      }
+    } else if (widget.highlightFacilityId != null) {
       if (isHighlighted) {
         fillColor = baseColor.withValues(alpha: 0.9);
         borderColor = baseColor.withValues(alpha: 1.0);
+        textColor = cs.onPrimary;
       } else {
-        fillColor = cs.onSurface.withValues(alpha: 0.06);
-        borderColor = cs.onSurface.withValues(alpha: 0.2);
+        fillColor = mutedFillColor;
+        borderColor = mutedBorderColor;
       }
     } else {
       fillColor = baseColor.withValues(alpha: 0.2);
@@ -304,19 +402,17 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          if (icon != null &&
-              (!isHighlighted || widget.highlightFacilityId == null))
+          if (icon != null && !isSelected)
             Opacity(
-              opacity: isHighlighted ? 0.5 : 0.2,
+              opacity: isAvailable ? 0.2 : 0.2,
               child: Icon(
                 icon,
                 size: iconSize > 0 ? iconSize : 0,
-                color: widget.highlightFacilityId != null && !isHighlighted
-                    ? cs.onSurfaceVariant
-                    : borderColor,
+                color: borderColor,
               ),
             ),
 
+          // Room label
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2.0),
             child: Text(
@@ -324,28 +420,23 @@ class _LibraryMapContentState extends State<_LibraryMapContent> {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
-                color: (widget.highlightFacilityId != null && isHighlighted)
-                    ? cs.onPrimary
-                    : cs.onSurface,
+                color: textColor,
               ),
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
             ),
           ),
+
+          if (isSelected)
+            Positioned(
+              top: 2,
+              right: 2,
+              child: Icon(Icons.check_circle, size: 10, color: Colors.white),
+            ),
         ],
       ),
     );
-  }
-
-  String _getMarkerLabel(String name) {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) {
-      return '';
-    }
-
-    final parts = trimmed.split(RegExp(r'\s+'));
-    return parts.last;
   }
 }
 
@@ -364,7 +455,6 @@ class GridPainter extends CustomPainter {
     for (double x = 0; x < size.width; x += gridSize) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
-
     for (double y = 0; y < size.height; y += gridSize) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }

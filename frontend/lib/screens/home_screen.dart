@@ -323,7 +323,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           );
                         } else if (!snapshot.hasData ||
-                            (snapshot.data!['libraries'] as List).isEmpty) {
+                            (snapshot.data!['libraries'] as List? ?? [])
+                                .isEmpty) {
                           return const EmptyState(
                             icon: Icons.insights_outlined,
                             title: 'No live data yet',
