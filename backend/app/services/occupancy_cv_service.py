@@ -492,7 +492,11 @@ def run_camera_capture_cycle() -> int:
             stream_url = str(camera.stream_url or "")
             normalized = normalize_stream_url(stream_url)
             logger.info("camera capture: start camera=%s url=%s", camera.name, normalized)
-            cap = cv2.VideoCapture(normalized)
+            # Pass timeout and TCP transport to FFmpeg via environment variable
+            os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|timeout;5000000")
+            cap = cv2.VideoCapture(normalized, cv2.CAP_FFMPEG)
+            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
             try:
                 if not cap.isOpened():
                     logger.warning("camera capture: open failed camera=%s url=%s", camera.name, normalized)
