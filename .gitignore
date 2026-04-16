@@ -1,4 +1,7 @@
 # ===== FLUTTER FRONTEND IGNORES =====
+# Local dev config (each developer maintains their own copy)
+frontend/dart_defines.json
+
 # Miscellaneous
 frontend/*.class
 frontend/*.log

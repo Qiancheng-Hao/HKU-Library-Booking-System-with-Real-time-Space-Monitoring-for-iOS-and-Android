@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/notification_service.dart';
 
+/// UI-facing entry point for booking reminder settings.
+///
+/// Owns the persisted reminder state (enabled / lead time) and delegates
+/// actual notification scheduling to [NotificationService]. UI code must
+/// never read or write these settings through [NotificationService] directly,
+/// to keep a single source of truth for reactivity.
 class NotificationProvider with ChangeNotifier {
   static const _storage = FlutterSecureStorage();
-  static const _keyEnabled = 'notif_enabled';
-  static const _keyMinutes = 'notif_reminder_minutes';
 
   bool _enabled = true;
   int _reminderMinutes = 30;
@@ -20,8 +24,10 @@ class NotificationProvider with ChangeNotifier {
   }
 
   Future<void> _load() async {
-    final enabled = await _storage.read(key: _keyEnabled);
-    final minutes = await _storage.read(key: _keyMinutes);
+    final enabled = await _storage.read(key: NotificationService.keyEnabled);
+    final minutes = await _storage.read(
+      key: NotificationService.keyReminderMinutes,
+    );
     _enabled = enabled != 'false';
     _reminderMinutes = int.tryParse(minutes ?? '') ?? 30;
     notifyListeners();
@@ -38,8 +44,16 @@ class NotificationProvider with ChangeNotifier {
 
     _enabled = value;
     notifyListeners();
-    await _storage.write(key: _keyEnabled, value: value ? 'true' : 'false');
-    await NotificationService.setReminderEnabled(value);
+    await _storage.write(
+      key: NotificationService.keyEnabled,
+      value: value ? 'true' : 'false',
+    );
+
+    if (value) {
+      await NotificationService.syncUpcomingReminders();
+    } else {
+      await NotificationService.cancelAllBookingReminders();
+    }
     return true;
   }
 
@@ -47,7 +61,12 @@ class NotificationProvider with ChangeNotifier {
     if (_reminderMinutes == minutes) return;
     _reminderMinutes = minutes;
     notifyListeners();
-    await _storage.write(key: _keyMinutes, value: minutes.toString());
-    await NotificationService.setReminderMinutes(minutes);
+    await _storage.write(
+      key: NotificationService.keyReminderMinutes,
+      value: minutes.toString(),
+    );
+    if (_enabled) {
+      await NotificationService.syncUpcomingReminders();
+    }
   }
 }

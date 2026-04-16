@@ -1,20 +1,21 @@
+import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-
-import 'api_service.dart';
+import '../core/di/app_services.dart';
+import '../core/models/reservation.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
-  static const String _enabledKey = 'notif_enabled';
-  static const String _minutesKey = 'notif_reminder_minutes';
+  static const String keyEnabled = 'notif_enabled';
+  static const String keyReminderMinutes = 'notif_reminder_minutes';
+  static const String _keyTrackedReminderIds = 'notif_booking_reminder_ids';
   static bool _initialized = false;
 
   static Future<void> initialize() async {
@@ -76,36 +77,20 @@ class NotificationService {
     return openAppSettings();
   }
 
-  static Future<bool> isReminderEnabled() async {
-    final enabled = await _storage.read(key: _enabledKey);
+  static Future<bool> _isReminderEnabled() async {
+    final enabled = await _storage.read(key: keyEnabled);
     return enabled != 'false';
   }
 
-  static Future<int> getReminderMinutes() async {
-    final minutes = await _storage.read(key: _minutesKey);
+  static Future<int> _getReminderMinutes() async {
+    final minutes = await _storage.read(key: keyReminderMinutes);
     return int.tryParse(minutes ?? '') ?? 30;
-  }
-
-  static Future<void> setReminderEnabled(bool enabled) async {
-    await _storage.write(key: _enabledKey, value: enabled ? 'true' : 'false');
-    if (!enabled) {
-      await cancelAllBookingReminders();
-      return;
-    }
-    await syncUpcomingReminders();
-  }
-
-  static Future<void> setReminderMinutes(int minutes) async {
-    await _storage.write(key: _minutesKey, value: minutes.toString());
-    if (await isReminderEnabled()) {
-      await syncUpcomingReminders();
-    }
   }
 
   static Future<void> syncUpcomingReminders() async {
     await initialize();
 
-    if (!await isReminderEnabled()) {
+    if (!await _isReminderEnabled()) {
       await cancelAllBookingReminders();
       return;
     }
@@ -113,7 +98,8 @@ class NotificationService {
     final hasPermission = await ensurePermissions();
     if (!hasPermission) return;
 
-    final reservations = await ApiService.getUserReservations();
+    final reservations = await AppServices.reservationRepository
+        .getUserReservations();
     await cancelAllBookingReminders();
 
     for (final reservation in reservations) {
@@ -122,33 +108,26 @@ class NotificationService {
   }
 
   static Future<void> scheduleReservationReminder(
-    Map<String, dynamic> reservation,
+    Reservation reservation,
   ) async {
     await initialize();
 
-    if (!await isReminderEnabled()) return;
+    if (!await _isReminderEnabled()) return;
 
-    final status = reservation['status']?.toString().toLowerCase();
-    if (status != 'confirmed' && status != 'pending') return;
-
-    final reminderMinutes = await getReminderMinutes();
-    final scheduledAt = _reservationStart(
+    final reminderMinutes = await _getReminderMinutes();
+    final scheduledAt = reminderScheduledAt(
       reservation,
-    ).subtract(Duration(minutes: reminderMinutes));
-    final now = DateTime.now();
+      reminderMinutes: reminderMinutes,
+      now: DateTime.now(),
+    );
+    if (scheduledAt == null) return;
 
-    if (!scheduledAt.isAfter(now)) return;
-
-    final facility = (reservation['facility'] as Map<String, dynamic>? ?? {});
-    final facilityName = facility['name']?.toString() ?? 'Reserved facility';
-    final libraryName = facility['library_name']?.toString() ?? 'HKU Library';
-    final notificationId = _notificationIdFor(reservation['id'].toString());
-    final startTime = reservation['start_time']?.toString().substring(0, 5);
+    final notificationId = notificationIdFor(reservation.id);
 
     await _plugin.zonedSchedule(
       id: notificationId,
       title: 'Booking reminder',
-      body: '$facilityName starts at $startTime in $libraryName.',
+      body: reminderBody(reservation),
       scheduledDate: tz.TZDateTime.from(scheduledAt, tz.local),
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
@@ -161,21 +140,29 @@ class NotificationService {
         iOS: const DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: reservation['id']?.toString(),
+      payload: reservation.id,
     );
+    await _trackReminderId(notificationId);
   }
 
   static Future<void> cancelReservationReminder(String reservationId) async {
     await initialize();
-    await _plugin.cancel(id: _notificationIdFor(reservationId));
+    final notificationId = notificationIdFor(reservationId);
+    await _plugin.cancel(id: notificationId);
+    await _untrackReminderId(notificationId);
   }
 
   static Future<void> cancelAllBookingReminders() async {
     await initialize();
-    await _plugin.cancelAll();
+    final trackedIds = await _trackedReminderIds();
+    for (final notificationId in trackedIds) {
+      await _plugin.cancel(id: notificationId);
+    }
+    await _saveTrackedReminderIds(<int>{});
   }
 
-  static int _notificationIdFor(String reservationId) {
+  @visibleForTesting
+  static int notificationIdFor(String reservationId) {
     final compact = reservationId.replaceAll('-', '');
     final suffix = compact.length > 8
         ? compact.substring(compact.length - 8)
@@ -187,16 +174,69 @@ class NotificationService {
     return compact.hashCode & 0x7fffffff;
   }
 
-  static DateTime _reservationStart(Map<String, dynamic> reservation) {
-    final date = reservation['reservation_date']?.toString() ?? '';
-    final startTime = reservation['start_time']?.toString() ?? '00:00:00';
-    return DateTime.parse('${date}T$startTime');
+  @visibleForTesting
+  static DateTime? reminderScheduledAt(
+    Reservation reservation, {
+    required int reminderMinutes,
+    required DateTime now,
+  }) {
+    if (!reservation.isUpcoming) return null;
+    final reservationStart = reservation.maybeStartDateTime;
+    if (reservationStart == null) return null;
+    final scheduledAt = reservationStart.subtract(
+      Duration(minutes: reminderMinutes),
+    );
+    if (!scheduledAt.isAfter(now)) return null;
+    return scheduledAt;
   }
 
-  static String _ianaTimeZoneName() {
-    if (Platform.isIOS || Platform.isMacOS) {
-      return 'Asia/Hong_Kong';
-    }
-    return 'Asia/Hong_Kong';
+  @visibleForTesting
+  static String reminderBody(Reservation reservation) {
+    final facilityName = reservation.facility?.name ?? 'Reserved facility';
+    final libraryName = reservation.facility?.libraryName ?? 'HKU Library';
+    final startTime = reservation.shortStartTime;
+    return '$facilityName starts at $startTime in $libraryName.';
   }
+
+  static Future<Set<int>> _trackedReminderIds() async {
+    final raw = await _storage.read(key: _keyTrackedReminderIds);
+    if (raw == null || raw.isEmpty) return <int>{};
+    try {
+      final decoded = json.decode(raw);
+      if (decoded is! List) return <int>{};
+      return decoded
+          .map((item) => int.tryParse(item.toString()))
+          .whereType<int>()
+          .toSet();
+    } catch (_) {
+      return <int>{};
+    }
+  }
+
+  static Future<void> _saveTrackedReminderIds(Set<int> ids) async {
+    if (ids.isEmpty) {
+      await _storage.delete(key: _keyTrackedReminderIds);
+      return;
+    }
+
+    final sortedIds = ids.toList()..sort();
+    await _storage.write(
+      key: _keyTrackedReminderIds,
+      value: json.encode(sortedIds),
+    );
+  }
+
+  static Future<void> _trackReminderId(int notificationId) async {
+    final trackedIds = await _trackedReminderIds();
+    trackedIds.add(notificationId);
+    await _saveTrackedReminderIds(trackedIds);
+  }
+
+  static Future<void> _untrackReminderId(int notificationId) async {
+    final trackedIds = await _trackedReminderIds();
+    trackedIds.remove(notificationId);
+    await _saveTrackedReminderIds(trackedIds);
+  }
+
+  static String _ianaTimeZoneName() => 'Asia/Hong_Kong';
 }

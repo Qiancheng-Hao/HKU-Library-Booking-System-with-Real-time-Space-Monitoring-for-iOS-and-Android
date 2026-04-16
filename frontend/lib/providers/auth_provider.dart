@@ -1,8 +1,29 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
+
+import '../features/auth/data/auth_repository.dart';
 import '../services/notification_service.dart';
 
+typedef NotificationSyncer = Future<void> Function();
+typedef NotificationCanceller = Future<void> Function();
+
 class AuthProvider with ChangeNotifier {
+  final AuthRepository _authRepository;
+  final NotificationSyncer _syncUpcomingReminders;
+  final NotificationCanceller _cancelAllBookingReminders;
+
+  AuthProvider({
+    required AuthRepository authRepository,
+    NotificationSyncer? syncUpcomingReminders,
+    NotificationCanceller? cancelAllBookingReminders,
+  }) : _authRepository = authRepository,
+       _syncUpcomingReminders =
+           syncUpcomingReminders ?? NotificationService.syncUpcomingReminders,
+       _cancelAllBookingReminders =
+           cancelAllBookingReminders ??
+           NotificationService.cancelAllBookingReminders {
+    _checkLoginStatus();
+  }
+
   bool _isLoggedIn = false;
   bool _isLoading = true;
   String? _userName;
@@ -13,17 +34,12 @@ class AuthProvider with ChangeNotifier {
   String? get userName => _userName;
   String? get userEmail => _userEmail;
 
-  AuthProvider() {
-    _checkLoginStatus();
-  }
-
   Future<void> _checkLoginStatus() async {
     try {
-      final token = await ApiService.getToken();
-      if (token != null) {
+      if (await _authRepository.hasStoredSession()) {
         _isLoggedIn = true;
         await _fetchUserProfile();
-        await NotificationService.syncUpcomingReminders();
+        await _syncUpcomingReminders();
       } else {
         _isLoggedIn = false;
       }
@@ -37,28 +53,29 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> login(String email, String password) async {
-    await ApiService.login(email, password);
+    _userName = null;
+    _userEmail = null;
+    await _authRepository.login(email, password);
     _isLoggedIn = true;
     await _fetchUserProfile();
-    await NotificationService.syncUpcomingReminders();
+    await _syncUpcomingReminders();
     notifyListeners();
   }
 
   Future<void> _fetchUserProfile() async {
     try {
-      final profile = await ApiService.getUserProfile();
-      _userName = profile['full_name'];
-      _userEmail =
-          profile['email'] as String? ?? await ApiService.getUserEmail();
+      final profile = await _authRepository.getUserProfile();
+      _userName = profile.fullName;
+      _userEmail = profile.email ?? await _authRepository.getStoredUserEmail();
     } catch (e) {
       debugPrint('Error fetching user profile: $e');
-      _userEmail = await ApiService.getUserEmail();
+      _userEmail = await _authRepository.getStoredUserEmail();
     }
   }
 
   Future<void> logout() async {
-    await ApiService.logout();
-    await NotificationService.cancelAllBookingReminders();
+    await _authRepository.logout();
+    await _cancelAllBookingReminders();
     _isLoggedIn = false;
     _userName = null;
     _userEmail = null;
