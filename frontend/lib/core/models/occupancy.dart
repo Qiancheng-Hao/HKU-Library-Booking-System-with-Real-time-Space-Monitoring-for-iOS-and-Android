@@ -3,15 +3,15 @@ import 'json_helpers.dart';
 class LibraryOccupancy {
   final int? libraryId;
   final String libraryName;
-  final String area;
-  final double occupancyRate;
+  final String? area;
+  final double? occupancyRate;
   final double? distanceFromUser;
 
   const LibraryOccupancy({
     this.libraryId,
     required this.libraryName,
-    required this.area,
-    required this.occupancyRate,
+    this.area,
+    this.occupancyRate,
     this.distanceFromUser,
   });
 
@@ -26,8 +26,8 @@ class LibraryOccupancy {
         'library_name',
         'name',
       ], fallback: 'Unknown'),
-      area: readString(json, 'area'),
-      occupancyRate: readFirstDouble(json, const [
+      area: json['area']?.toString(),
+      occupancyRate: readFirstNullableDouble(json, const [
         'occupancyRate',
         'occupancy_rate',
       ]),
@@ -44,7 +44,12 @@ class LibraryOccupancy {
     return libraryName;
   }
 
-  double get clampedOccupancyRate => occupancyRate.clamp(0.0, 100.0);
+  bool get hasOccupancyRate => occupancyRate != null && occupancyRate! >= 0;
+
+  double? get clampedOccupancyRate {
+    if (!hasOccupancyRate) return null;
+    return occupancyRate!.clamp(0.0, 100.0);
+  }
 }
 
 class OccupancySnapshot {

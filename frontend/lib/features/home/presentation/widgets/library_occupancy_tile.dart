@@ -12,7 +12,7 @@ class LibraryOccupancyTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    final occupancyRate = item.clampedOccupancyRate;
+    final occupancyRate = item.clampedOccupancyRate ?? 0.0;
     final percentage = occupancyRate.toStringAsFixed(1);
     final isCrowded = occupancyRate > 70;
     final isModerate = occupancyRate > 30 && occupancyRate <= 70;
@@ -53,7 +53,7 @@ class LibraryOccupancyTile extends StatelessWidget {
                 children: [
                   Text(libraryName, style: tt.titleMedium),
                   Text(
-                    item.area,
+                    item.area ?? '',
                     style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],

@@ -54,11 +54,16 @@ class BestSpotCard extends StatelessWidget {
       final libraryName = data.displayLibraryName;
       final area = data.area;
       final occupancyRate = data.clampedOccupancyRate;
-      final percentage = occupancyRate.toStringAsFixed(1);
       final distance = data.distanceFromUser;
       final distanceSuffix = distance != null
           ? ' • ${distance.toStringAsFixed(0)}m away'
           : '';
+      final locationLabel = area == null || area.trim().isEmpty
+          ? libraryName
+          : '$libraryName\n$area';
+      final statusLabel = occupancyRate == null
+          ? 'Occupancy unavailable$distanceSuffix'
+          : '${occupancyRate.toStringAsFixed(1)}% Occupied$distanceSuffix';
 
       content = Row(
         children: [
@@ -90,12 +95,12 @@ class BestSpotCard extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  '$libraryName\n$area',
+                  locationLabel,
                   style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  '$percentage% Occupied$distanceSuffix',
+                  statusLabel,
                   style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
               ],

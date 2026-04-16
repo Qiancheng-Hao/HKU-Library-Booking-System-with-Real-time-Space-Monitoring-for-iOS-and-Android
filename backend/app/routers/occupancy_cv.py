@@ -158,6 +158,61 @@ def _select_best_open_area(
     return candidates[0]
 
 
+def _best_snapshot_for_library(
+    rows: list[AreaOccupancySnapshot],
+) -> AreaOccupancySnapshot | None:
+    valid = [
+        row
+        for row in rows
+        if row.occupancy_rate is not None
+        and float(row.occupancy_rate) >= 0
+        and row.area is not None
+        and str(row.area).strip()
+    ]
+    if not valid:
+        return None
+    valid.sort(key=lambda row: (float(row.occupancy_rate), str(row.area)))
+    return valid[0]
+
+
+def _select_closest_open_library(
+    req: OccupancyRecommendationRequest,
+    *,
+    libraries: list[Library],
+    snapshots: list[AreaOccupancySnapshot],
+    at: datetime,
+) -> tuple[float, Library, AreaOccupancySnapshot | None] | None:
+    by_location: dict[str, list[AreaOccupancySnapshot]] = {}
+    for row in snapshots:
+        if not row.location:
+            continue
+        by_location.setdefault(row.location, []).append(row)
+
+    candidates: list[tuple[float, Library, AreaOccupancySnapshot | None]] = []
+    for lib in libraries:
+        if not _is_open_at(opening_hours=lib.opening_hours, at=at):
+            continue
+        coords = _library_coords(lib)
+        if coords is None:
+            continue
+        lib_lat, lib_lon = coords
+        distance_m = _haversine_m(req.latitude, req.longitude, lib_lat, lib_lon)
+        best_snapshot = _best_snapshot_for_library(by_location.get(lib.name, []))
+        candidates.append((distance_m, lib, best_snapshot))
+
+    if not candidates:
+        return None
+
+    candidates.sort(
+        key=lambda item: (
+            item[0],
+            item[2] is None,
+            float(item[2].occupancy_rate) if item[2] is not None else float("inf"),
+        )
+    )
+    return candidates[0]
+
+
 def _snapshot_from_cache(location: str, area: str, occupancy_rate: float, sample_count: int, window_seconds: int, measured_at: datetime) -> AreaOccupancySnapshot:
     return AreaOccupancySnapshot(
         location=location,
@@ -348,16 +403,37 @@ def get_occupancy_recommendation(
     libraries = db.execute(select(Library).order_by(Library.name.asc())).scalars().all()
     snapshots = _load_latest_snapshots(db, target_time=at, prefer_cache=True)
 
-    selected = _select_best_open_area(req, libraries=libraries, snapshots=snapshots, at=at)
-    if selected is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No open study areas available.",
+    if req.strategy == "distance":
+        selected_library = _select_closest_open_library(
+            req,
+            libraries=libraries,
+            snapshots=snapshots,
+            at=at,
         )
+        if selected_library is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No open study areas available.",
+            )
 
-    distance_m, occupancy_percent, lib, row = selected
+        distance_m, lib, row = selected_library
+        occupancy_percent = (
+            float(row.occupancy_rate) * 100.0
+            if row is not None and row.occupancy_rate is not None
+            else None
+        )
+    else:
+        selected = _select_best_open_area(req, libraries=libraries, snapshots=snapshots, at=at)
+        if selected is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No open study areas available.",
+            )
+
+        distance_m, occupancy_percent, lib, row = selected
+
     last_updated = None
-    if row.measured_at is not None:
+    if row is not None and row.measured_at is not None:
         last_updated_dt = (
             row.measured_at.replace(tzinfo=timezone.utc)
             if row.measured_at.tzinfo is None
@@ -368,8 +444,8 @@ def get_occupancy_recommendation(
     return OccupancyRecommendationResponse(
         libraryId=str(lib.id),
         libraryName=lib.name,
-        area=str(row.area),
-        occupancyRate=float(occupancy_percent),
+        area=str(row.area) if row is not None and row.area is not None else None,
+        occupancyRate=float(occupancy_percent) if occupancy_percent is not None else None,
         distanceFromUser=float(distance_m),
         openingHours=lib.opening_hours,
         lastUpdated=last_updated,

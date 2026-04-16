@@ -39,7 +39,7 @@ class LibraryOccupancyItem(BaseModel):
     libraryId: str
     libraryName: str
     area: str | None = None
-    occupancyRate: float
+    occupancyRate: float | None = None
     distanceFromUser: float
     isOpen: bool
     openingHours: str | None = None
@@ -71,8 +71,8 @@ class OccupancyRecommendationRequest(BaseModel):
 class OccupancyRecommendationResponse(BaseModel):
     libraryId: str
     libraryName: str
-    area: str
-    occupancyRate: float
+    area: str | None = None
+    occupancyRate: float | None = None
     distanceFromUser: float
     openingHours: str | None = None
     lastUpdated: str | None = None

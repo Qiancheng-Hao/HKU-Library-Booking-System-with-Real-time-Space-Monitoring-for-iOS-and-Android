@@ -67,6 +67,18 @@ double readFirstDouble(JsonMap json, List<String> keys, {double fallback = 0}) {
   return fallback;
 }
 
+double? readFirstNullableDouble(JsonMap json, List<String> keys) {
+  for (final key in keys) {
+    if (!json.containsKey(key)) continue;
+    final value = json[key];
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+  return null;
+}
+
 bool readBool(JsonMap json, String key, {bool fallback = false}) {
   final value = json[key];
   if (value is bool) return value;

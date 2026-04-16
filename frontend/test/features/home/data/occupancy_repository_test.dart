@@ -57,5 +57,30 @@ void main() {
         });
       },
     );
+
+    test(
+      'getRecommendation allows closest result without occupancy data',
+      () async {
+        final client = FakeApiClient()
+          ..postResponses['/api/v1/occupancy/recommendation'] = {
+            'libraryName': 'Main Library',
+            'distanceFromUser': 100,
+            'occupancyRate': null,
+            'area': null,
+          };
+        final repository = OccupancyRepository(client);
+
+        final recommendation = await repository.getRecommendation(
+          latitude: 22.1,
+          longitude: 114.2,
+          strategy: 'distance',
+        );
+
+        expect(recommendation.libraryName, 'Main Library');
+        expect(recommendation.area, isNull);
+        expect(recommendation.occupancyRate, isNull);
+        expect(recommendation.clampedOccupancyRate, isNull);
+      },
+    );
   });
 }

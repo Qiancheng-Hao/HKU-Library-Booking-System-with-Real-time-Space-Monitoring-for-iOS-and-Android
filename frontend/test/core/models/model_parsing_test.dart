@@ -124,6 +124,19 @@ void main() {
       expect(item.distanceFromUser, 180.25);
     });
 
+    test('supports missing occupancy for distance-based recommendations', () {
+      final item = LibraryOccupancy.fromJson({
+        'library_name': 'Main Library',
+        'distance_from_user': '88.5',
+        'occupancy_rate': null,
+      });
+
+      expect(item.area, isNull);
+      expect(item.occupancyRate, isNull);
+      expect(item.clampedOccupancyRate, isNull);
+      expect(item.distanceFromUser, 88.5);
+    });
+
     test('parses snapshot list and clamps display percentage', () {
       final snapshot = OccupancySnapshot.fromJson({
         'libraries': [
