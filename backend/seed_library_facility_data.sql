@@ -450,3 +450,16 @@ where facilities.library_id = libraries.id
 -- Main Library Study Table
 
 -- Medical Library Single Study Room
+
+insert into camera_sources (id, name, stream_url, location, area, enabled)
+values
+    ('00000000-0000-0000-0000-000000000101', 'cam-01', 'rtsp://127.0.0.1:8554/stream1', 'Main Library', 'Floor 3', true),
+    ('00000000-0000-0000-0000-000000000102', 'cam-02', 'rtsp://127.0.0.1:8554/stream2', 'Main Library', 'Floor 1', true),
+    ('00000000-0000-0000-0000-000000000103', 'cam-03', 'rtsp://127.0.0.1:8554/stream3', 'Chi Wah Learning Commons', 'Floor 1', true),
+    ('00000000-0000-0000-0000-000000000104', 'cam-04', 'rtsp://127.0.0.1:8554/stream4', 'Chi Wah Learning Commons', 'Floor 2', true)
+on conflict (name) do update
+set
+    stream_url = excluded.stream_url,
+    location = excluded.location,
+    area = excluded.area,
+    enabled = excluded.enabled;

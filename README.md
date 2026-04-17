@@ -49,6 +49,7 @@ FastAPI Backend ------------------> PostgreSQL / TimescaleDB
 ├── backend/          FastAPI API, models, routers, services
 ├── ai_agent/         AI booking agent service
 ├── computer_vision/  CV models, scripts, experiments, and tests
+├── streaming/        Local MediaMTX / ffmpeg video stream fixtures
 ├── docker-compose.yml
 ├── mediamtx.yml
 ├── env.example       shared infra env for local containers
@@ -134,6 +135,27 @@ This brings up:
 - RabbitMQ
 
 Optional streaming support is configured in [mediamtx.yml](./mediamtx.yml). Start it separately only if your camera or streaming workflow needs it.
+
+### Local Video Streaming
+
+For repeatable local occupancy / CV demos, place short mp4 fixtures in
+[streaming/videos](./streaming/videos) with names like `stream1.mp4`,
+`stream2.mp4`, `stream3.mp4`, and `stream4.mp4`.
+
+Start MediaMTX and four ffmpeg publishers:
+
+```bash
+docker compose --profile streaming up mediamtx stream1 stream2 stream3 stream4
+```
+
+The default stream URLs are:
+
+- `rtmp://127.0.0.1:1935/stream1`
+- `rtsp://127.0.0.1:8554/stream1`
+- `http://127.0.0.1:8889/stream1`
+
+Change the final stream number for `stream2`, `stream3`, and `stream4`.
+See [streaming/README.md](./streaming/README.md).
 
 ## Backend Setup
 

@@ -1,0 +1,11 @@
+api: no
+metrics: no
+pprof: no
+
+rtspAddress: :8554
+rtmpAddress: :1935
+webrtcAddress: :8889
+
+# Allow ffmpeg publishers to create stream1, stream2, etc. dynamically.
+paths:
+  all_others:

@@ -102,6 +102,12 @@ computer_vision/core/__pycache__/seat_occupancy_detector.cpython-312.pyc
 *.jpg
 *.png
 
+# Version the four local streaming fixture videos used by Docker Compose.
+!streaming/videos/stream1.mp4
+!streaming/videos/stream2.mp4
+!streaming/videos/stream3.mp4
+!streaming/videos/stream4.mp4
+
 # Allow images in frontend
 !frontend/**/*.jpg
 !frontend/**/*.png
