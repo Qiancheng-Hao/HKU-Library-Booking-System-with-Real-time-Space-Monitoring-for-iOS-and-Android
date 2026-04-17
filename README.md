@@ -214,6 +214,22 @@ Run the app:
 flutter run --dart-define-from-file=dart_defines.json
 ```
 
+When running the iOS app directly from Xcode, Xcode does not read
+`dart_defines.json`. Create `frontend/ios/Flutter/Local.xcconfig` instead:
+
+```xcconfig
+DART_DEFINES=$(inherited),<base64 encoded BASE_URL=...>
+```
+
+For example:
+
+```bash
+printf 'BASE_URL=http://192.168.x.x:8000' | base64
+```
+
+`Local.xcconfig` is intentionally ignored by git because it contains
+machine-specific local network addresses.
+
 ### Frontend Structure
 
 ```text

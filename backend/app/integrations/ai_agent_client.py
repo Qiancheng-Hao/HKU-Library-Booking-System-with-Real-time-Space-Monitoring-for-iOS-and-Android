@@ -36,6 +36,10 @@ class AIAgentBadResponseError(AIAgentClientError):
     pass
 
 
+class AIAgentSessionExpiredError(AIAgentBadResponseError):
+    pass
+
+
 class AIAgentClient:
     def __init__(self) -> None:
         self.base_url = settings.ai_agent_base_url.rstrip("/")
@@ -98,6 +102,8 @@ class AIAgentClient:
             raise AIAgentUnavailableError("AI service failed to process the request.")
         if response.status_code >= 400:
             detail = self._extract_detail(response)
+            if response.status_code == 404 and self._is_expired_session_detail(detail):
+                raise AIAgentSessionExpiredError(detail)
             raise AIAgentBadResponseError(detail)
 
         try:
@@ -119,3 +125,12 @@ class AIAgentClient:
         if isinstance(payload, dict):
             return str(payload.get("detail") or payload.get("message") or f"AI service returned HTTP {response.status_code}.")
         return f"AI service returned HTTP {response.status_code}."
+
+    @staticmethod
+    def _is_expired_session_detail(detail: str) -> bool:
+        normalized = detail.lower()
+        return "session" in normalized and (
+            "expired" in normalized
+            or "invalid" in normalized
+            or "not found" in normalized
+        )

@@ -54,6 +54,13 @@ class _AppViewState extends State<_AppView> {
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
           themeMode: themeProvider.themeMode,
+          builder: (context, child) {
+            return GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+              child: child,
+            );
+          },
           home: auth.isLoading
               ? const Scaffold(body: Center(child: CircularProgressIndicator()))
               : auth.isLoggedIn

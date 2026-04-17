@@ -102,6 +102,11 @@ class AiSessionProvider extends ChangeNotifier {
 
       final preview = response.bookingPreview;
 
+      if (_isRecoveredSessionResponse(response)) {
+        awaitingConfirmation = false;
+        pendingConfirmation = null;
+        messages.add(ChatMessage.divider('Conversation Reconnected'));
+      }
       messages.add(ChatMessage.ai(response.reply, data: response));
       if (response.readyForConfirmation && preview != null) {
         awaitingConfirmation = true;
@@ -200,6 +205,15 @@ class AiSessionProvider extends ChangeNotifier {
     if (message.data!.readyForConfirmation) return false;
 
     return message.data!.suggestedOptions?.rooms.isNotEmpty ?? false;
+  }
+
+  bool _isRecoveredSessionResponse(AiChatResponse response) {
+    return response.warnings.any((warning) {
+      final value = warning.toLowerCase();
+      return value.contains('conversation') &&
+          value.contains('restarted') &&
+          value.contains('no longer available');
+    });
   }
 
   void _setLoading(bool value) {

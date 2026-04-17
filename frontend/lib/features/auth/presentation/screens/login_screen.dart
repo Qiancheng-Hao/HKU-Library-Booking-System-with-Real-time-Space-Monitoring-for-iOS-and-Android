@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -26,19 +28,46 @@ class _LoginScreenView extends StatefulWidget {
   State<_LoginScreenView> createState() => _LoginScreenViewState();
 }
 
-class _LoginScreenViewState extends State<_LoginScreenView> {
+class _LoginScreenViewState extends State<_LoginScreenView>
+    with WidgetsBindingObserver {
+  static const _emailDomains = ['connect.hku.hk', 'hku.hk', 'cs.hku.hk'];
+  static const _emailOptionTileHeight = 56.0;
+  static const _emailOptionsGap = 12.0;
+  static const _maxVisibleEmailOptions = 3;
+
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
+  final _emailFieldKey = GlobalKey();
   final _emailController = TextEditingController();
   final _emailFocusNode = FocusNode();
   final _passwordController = TextEditingController();
+  var _emailScrollRequestId = 0;
+  double _lastKeyboardInset = 0;
   bool _obscurePassword = true;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _emailController.addListener(_handleEmailInputChanged);
+    _emailFocusNode.addListener(_handleEmailInputChanged);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _emailController.removeListener(_handleEmailInputChanged);
+    _emailFocusNode.removeListener(_handleEmailInputChanged);
+    _scrollController.dispose();
     _emailController.dispose();
     _emailFocusNode.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    _scheduleEmailSuggestionScroll(immediate: true);
   }
 
   Future<void> _login() async {
@@ -58,9 +87,122 @@ class _LoginScreenViewState extends State<_LoginScreenView> {
     }
   }
 
+  List<String> _emailOptionsFor(String text) {
+    if (!text.contains('@')) return const [];
+
+    final parts = text.split('@');
+    if (parts.length > 2) return const [];
+
+    final prefix = parts[0];
+    final domainPart = parts.length == 2 ? parts[1] : '';
+    if (_emailDomains.contains(domainPart)) return const [];
+
+    return _emailDomains
+        .where((domain) => domain.startsWith(domainPart))
+        .map((domain) => '$prefix@$domain')
+        .toList(growable: false);
+  }
+
+  List<String> get _emailOptions => _emailOptionsFor(_emailController.text);
+
+  bool get _shouldShowEmailOptions =>
+      _emailFocusNode.hasFocus && _emailOptions.isNotEmpty;
+
+  void _handleEmailInputChanged() {
+    if (mounted) setState(() {});
+    _scheduleEmailSuggestionScroll(immediate: true);
+  }
+
+  void _selectEmailOption(String option) {
+    _emailController.value = TextEditingValue(
+      text: option,
+      selection: TextSelection.collapsed(offset: option.length),
+    );
+    _emailFocusNode.requestFocus();
+  }
+
+  void _scheduleEmailSuggestionScroll({bool immediate = false}) {
+    if (!_emailFocusNode.hasFocus) return;
+
+    final optionCount = _emailOptionsFor(_emailController.text).length;
+    if (optionCount == 0) return;
+    final requestId = ++_emailScrollRequestId;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || requestId != _emailScrollRequestId) return;
+
+      _scrollEmailSuggestionsIntoView(optionCount, immediate: immediate);
+      for (final delay in const [
+        Duration(milliseconds: 40),
+        Duration(milliseconds: 120),
+        Duration(milliseconds: 240),
+      ]) {
+        Future<void>.delayed(delay, () {
+          if (!mounted || requestId != _emailScrollRequestId) return;
+
+          _scrollEmailSuggestionsIntoView(optionCount, immediate: true);
+        });
+      }
+    });
+  }
+
+  void _scrollEmailSuggestionsIntoView(
+    int optionCount, {
+    required bool immediate,
+  }) {
+    if (!mounted || !_scrollController.hasClients) return;
+
+    final mediaQuery = MediaQuery.of(context);
+    final keyboardInset = mediaQuery.viewInsets.bottom > 0
+        ? mediaQuery.viewInsets.bottom
+        : (_emailFocusNode.hasFocus ? _lastKeyboardInset : 0.0);
+    if (keyboardInset <= 0) return;
+
+    final renderObject = _emailFieldKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return;
+
+    final optionsHeight = (optionCount * _emailOptionTileHeight)
+        .clamp(0.0, _emailOptionTileHeight * _maxVisibleEmailOptions)
+        .toDouble();
+    final fieldBottom =
+        renderObject.localToGlobal(Offset.zero).dy + renderObject.size.height;
+    final suggestionsBottom = _shouldShowEmailOptions
+        ? fieldBottom + _emailOptionsGap + optionsHeight
+        : fieldBottom;
+    final availableBottom =
+        mediaQuery.size.height - keyboardInset - _emailOptionsGap;
+    final overflow = suggestionsBottom - availableBottom;
+
+    if (overflow <= 0) return;
+
+    final targetOffset =
+        (_scrollController.offset + overflow + _emailOptionsGap)
+            .clamp(0.0, _scrollController.position.maxScrollExtent)
+            .toDouble();
+    if ((targetOffset - _scrollController.offset).abs() < 1) return;
+
+    if (immediate) {
+      _scrollController.jumpTo(targetOffset);
+      return;
+    }
+
+    _scrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    if (keyboardInset > 0) {
+      _lastKeyboardInset = keyboardInset;
+    }
+    final reservedKeyboardInset = keyboardInset > 0
+        ? keyboardInset
+        : (_emailFocusNode.hasFocus ? _lastKeyboardInset : 0.0);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -125,6 +267,9 @@ class _LoginScreenViewState extends State<_LoginScreenView> {
               ),
             ),
             SingleChildScrollView(
+              controller: _scrollController,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+              padding: EdgeInsets.only(bottom: reservedKeyboardInset),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: size.height),
                 child: Column(
@@ -201,94 +346,48 @@ class _LoginScreenViewState extends State<_LoginScreenView> {
                               ),
                             ),
                             const SizedBox(height: AppSpacing.xl),
-                            RawAutocomplete<String>(
-                              textEditingController: _emailController,
-                              focusNode: _emailFocusNode,
-                              optionsBuilder: (textEditingValue) {
-                                final text = textEditingValue.text;
-                                if (!text.contains('@')) {
-                                  return const Iterable<String>.empty();
-                                }
-                                final parts = text.split('@');
-                                if (parts.length > 2) {
-                                  return const Iterable<String>.empty();
-                                }
-                                final prefix = parts[0];
-                                final domainPart = parts.length == 2
-                                    ? parts[1]
-                                    : '';
-                                const domains = ['hku.hk', 'connect.hku.hk'];
-                                return domains
-                                    .where((d) => d.startsWith(domainPart))
-                                    .map((d) => '$prefix@$d');
-                              },
-                              fieldViewBuilder:
-                                  (
-                                    context,
-                                    textEditingController,
-                                    focusNode,
-                                    onFieldSubmitted,
-                                  ) {
-                                    return TextFormField(
-                                      controller: textEditingController,
-                                      focusNode: focusNode,
-                                      keyboardType: TextInputType.emailAddress,
-                                      decoration: InputDecoration(
-                                        labelText: 'HKU Email',
-                                        prefixIcon: Icon(
-                                          Icons.email_outlined,
-                                          color: cs.primary,
-                                        ),
-                                      ),
-                                      validator: (v) {
-                                        if (v == null || v.isEmpty) {
-                                          return 'Required';
-                                        }
-                                        if (!v.contains('@') ||
-                                            !v.contains('.')) {
-                                          return 'Enter a valid email';
-                                        }
-                                        return null;
-                                      },
-                                      onFieldSubmitted: (_) =>
-                                          onFieldSubmitted(),
-                                    );
-                                  },
-                              optionsViewBuilder:
-                                  (context, onSelected, options) {
-                                    return Align(
-                                      alignment: Alignment.topLeft,
-                                      child: Material(
-                                        elevation: 4,
-                                        color: cs.surfaceContainerHigh,
-                                        borderRadius: BorderRadius.circular(
-                                          AppRadius.md,
-                                        ),
-                                        child: SizedBox(
-                                          width:
-                                              MediaQuery.of(
-                                                context,
-                                              ).size.width -
-                                              48,
-                                          child: ListView.builder(
-                                            padding: EdgeInsets.zero,
-                                            shrinkWrap: true,
-                                            itemCount: options.length,
-                                            itemBuilder: (context, index) {
-                                              final option = options.elementAt(
-                                                index,
-                                              );
-                                              return ListTile(
-                                                title: Text(option),
-                                                onTap: () => onSelected(option),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
+                            KeyedSubtree(
+                              key: _emailFieldKey,
+                              child: TextFormField(
+                                controller: _emailController,
+                                focusNode: _emailFocusNode,
+                                keyboardType: TextInputType.emailAddress,
+                                decoration: InputDecoration(
+                                  labelText: 'HKU Email',
+                                  prefixIcon: Icon(
+                                    Icons.email_outlined,
+                                    color: cs.primary,
+                                  ),
+                                ),
+                                onTap: _scheduleEmailSuggestionScroll,
+                                validator: (v) {
+                                  if (v == null || v.isEmpty) {
+                                    return 'Required';
+                                  }
+                                  if (!v.contains('@') || !v.contains('.')) {
+                                    return 'Enter a valid email';
+                                  }
+                                  return null;
+                                },
+                              ),
                             ),
+                            if (_shouldShowEmailOptions) ...[
+                              const SizedBox(height: _emailOptionsGap),
+                              Material(
+                                elevation: 4,
+                                color: cs.surfaceContainerHigh,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: _EmailOptionsList(
+                                  options: _emailOptions,
+                                  maxVisibleOptions: _maxVisibleEmailOptions,
+                                  itemHeight: _emailOptionTileHeight,
+                                  onSelected: _selectEmailOption,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: AppSpacing.lg),
                             TextFormField(
                               controller: _passwordController,
@@ -333,6 +432,71 @@ class _LoginScreenViewState extends State<_LoginScreenView> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmailOptionsList extends StatefulWidget {
+  const _EmailOptionsList({
+    required this.options,
+    required this.maxVisibleOptions,
+    required this.itemHeight,
+    required this.onSelected,
+  });
+
+  final List<String> options;
+  final int maxVisibleOptions;
+  final double itemHeight;
+  final ValueChanged<String> onSelected;
+
+  @override
+  State<_EmailOptionsList> createState() => _EmailOptionsListState();
+}
+
+class _EmailOptionsListState extends State<_EmailOptionsList> {
+  late final ScrollController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleOptionCount = math.min(
+      widget.options.length,
+      widget.maxVisibleOptions,
+    );
+
+    return SizedBox(
+      height: widget.itemHeight * visibleOptionCount,
+      child: Scrollbar(
+        controller: _controller,
+        interactive: true,
+        thumbVisibility: widget.options.length > widget.maxVisibleOptions,
+        child: ListView.builder(
+          controller: _controller,
+          padding: EdgeInsets.zero,
+          primary: false,
+          physics: const ClampingScrollPhysics(),
+          itemExtent: widget.itemHeight,
+          itemCount: widget.options.length,
+          itemBuilder: (context, index) {
+            final option = widget.options[index];
+            return ListTile(
+              title: Text(option),
+              onTap: () => widget.onSelected(option),
+            );
+          },
         ),
       ),
     );

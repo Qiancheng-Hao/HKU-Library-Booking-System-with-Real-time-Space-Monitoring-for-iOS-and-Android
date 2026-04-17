@@ -126,6 +126,25 @@ def _get_session_or_raise(session_id: str) -> dict[str, Any]:
         session["expires_at"] = _now() + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
         return session
 
+def _llm_http_exception(exc: Exception) -> HTTPException | None:
+    try:
+        from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError
+    except ImportError:
+        return None
+
+    if isinstance(exc, APITimeoutError):
+        return HTTPException(status_code=504, detail="LLM provider request timed out.")
+    if isinstance(exc, APIConnectionError):
+        return HTTPException(status_code=503, detail="LLM provider is unreachable.")
+    if isinstance(exc, APIStatusError):
+        status_code = exc.status_code
+        detail = f"LLM provider returned HTTP {status_code}."
+        if status_code >= 500:
+            return HTTPException(status_code=503, detail=detail)
+        return HTTPException(status_code=502, detail=detail)
+    if isinstance(exc, APIError):
+        return HTTPException(status_code=502, detail="LLM provider request failed.")
+    return None
 
 def _build_safe_agent(user_id: str):
     from booking_agent import BookingAgent
@@ -547,12 +566,17 @@ async def chat_with_agent_endpoint(
             len(reply),
         )
         return _build_state_payload(session_id, reply=reply)
-    except Exception:
+    except HTTPException:
+        raise
+    except Exception as exc:
         LOGGER.exception(
             "chat_request_failed session_id=%s elapsed_ms=%s",
             session_id,
             int((time.perf_counter() - started_at) * 1000),
         )
+        llm_error = _llm_http_exception(exc)
+        if llm_error is not None:
+            raise llm_error from exc
         raise
 
 

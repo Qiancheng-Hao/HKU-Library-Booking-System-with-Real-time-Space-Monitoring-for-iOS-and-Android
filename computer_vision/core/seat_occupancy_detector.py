@@ -528,7 +528,7 @@ class SeatOccupancyDetector:
             #"hogging_item_count_associated": len(associated_items),
             #"total_items_detected": len(objects_boxes),
             "total_number_of_seats": len(seat_boxes),
-            "occupancy_rate": (person_count + hogging_region_count) / len(seat_boxes) if len(seat_boxes) > 0 else -1.0,
+            "occupancy_rate": min((person_count + hogging_region_count) / len(seat_boxes) if len(seat_boxes) > 0 else -1.0, 1.0),
             # "thresholds_used": {
             #     "confidence": confidence_threshold,
             #     "proximity_pixels": proximity_threshold,

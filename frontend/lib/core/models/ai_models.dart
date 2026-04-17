@@ -15,6 +15,7 @@ class AiChatResponse implements AiMessageData {
   @override
   final AiSuggestedOptions? suggestedOptions;
   final AiCollectedInfo? collectedInfo;
+  final List<String> warnings;
 
   const AiChatResponse({
     required this.reply,
@@ -22,6 +23,7 @@ class AiChatResponse implements AiMessageData {
     this.bookingPreview,
     this.suggestedOptions,
     this.collectedInfo,
+    this.warnings = const [],
   });
 
   factory AiChatResponse.fromJson(JsonMap json) {
@@ -40,6 +42,7 @@ class AiChatResponse implements AiMessageData {
       collectedInfo: collectedJson.isEmpty
           ? null
           : AiCollectedInfo.fromJson(collectedJson),
+      warnings: asStringList(json['warnings']),
     );
   }
 }
