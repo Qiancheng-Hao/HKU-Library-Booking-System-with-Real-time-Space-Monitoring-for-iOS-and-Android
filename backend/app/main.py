@@ -17,7 +17,7 @@ from app.models.occupancy import OccupancyLog  # Ensure model is imported for cr
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.core import security
-from app.routers import ai, auth, facilities, libraries, occupancy_cv, reservations
+from app.routers import ai, auth, facilities, libraries, occupancy_cv, reports, reservations
 from app.services.occupancy_cv_service import (
     compute_and_store_area_snapshots,
     run_camera_capture_cycle,
@@ -165,6 +165,7 @@ app.include_router(libraries.router, prefix=f"/api/{settings.api_version}")
 app.include_router(facilities.router, prefix=f"/api/{settings.api_version}")
 app.include_router(reservations.router, prefix=f"/api/{settings.api_version}")
 app.include_router(occupancy_cv.router, prefix=f"/api/{settings.api_version}")
+app.include_router(reports.router, prefix=f"/api/{settings.api_version}")
 
 # log to area snapshots
 async def _run_occupancy_realtime_loop() -> None:
