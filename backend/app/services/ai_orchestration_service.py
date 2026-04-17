@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.integrations.ai_agent_client import AIAgentClient
+from app.integrations.ai_agent_client import AIAgentClient, AIAgentSessionExpiredError
 from app.models import AISession
 from app.schemas.ai import (
     AIChatRequest,
@@ -48,7 +48,12 @@ class AIOrchestrationService:
 
     def chat(self, user_id: uuid.UUID, payload: AIChatRequest) -> AIChatResponse:
         session = self.get_session_record(user_id, payload.ai_session_id)
-        upstream = self.client.chat_with_agent(session.upstream_session_id, payload.message)
+        try:
+            upstream = self.client.chat_with_agent(session.upstream_session_id, payload.message)
+        except AIAgentSessionExpiredError:
+            upstream = self._recover_expired_upstream_session(session, user_id)
+            return self._build_chat_response(upstream)
+
         session.last_message_summary = payload.message[:500]
         session.expires_at = self._default_expiry()
         self.db.add(session)
@@ -129,6 +134,32 @@ class AIOrchestrationService:
             suggestedOptions=upstream.suggested_options,
             rawIntent=upstream.raw_intent,
             warnings=upstream.warnings,
+        )
+
+    def _recover_expired_upstream_session(
+        self,
+        session: AISession,
+        user_id: uuid.UUID,
+    ) -> AgentChatResponse:
+        upstream = self.client.create_session(str(user_id))
+        session.upstream_session_id = upstream.session_id or ""
+        session.status = "active"
+        session.expires_at = upstream.expires_at or self._default_expiry()
+        session.last_message_summary = None
+        session.last_intent_hash = None
+        session.last_confirmed_intent_hash = None
+        session.last_confirm_result = None
+        self.db.add(session)
+        self.db.commit()
+        return AgentChatResponse(
+            status="success",
+            reply=(
+                "I had to reconnect the AI booking assistant because the previous "
+                "conversation expired. Please send your booking request again."
+            ),
+            warnings=[
+                "The previous AI conversation was no longer available and has been restarted."
+            ],
         )
 
     @staticmethod

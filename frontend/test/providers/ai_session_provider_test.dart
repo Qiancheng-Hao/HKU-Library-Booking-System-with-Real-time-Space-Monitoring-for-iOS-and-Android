@@ -97,6 +97,40 @@ void main() {
       expect(provider.isLoading, isFalse);
     });
 
+    test('sendMessage marks recovered conversations with a divider', () async {
+      final repository = _FakeAiAgentRepository(
+        chatResponses: [
+          const AiChatResponse(
+            reply:
+                'I had to reconnect the AI booking assistant. Please send your booking request again.',
+            readyForConfirmation: false,
+            warnings: [
+              'The previous AI conversation was no longer available and has been restarted.',
+            ],
+          ),
+        ],
+      );
+      final provider = AiSessionProvider(aiAgentRepository: repository);
+
+      await provider.initSession();
+      provider.awaitingConfirmation = true;
+      provider.pendingConfirmation = const AiBookingPreview(
+        library: 'Main Library',
+        date: '2026-04-17',
+      );
+      await provider.sendMessage('hello');
+
+      expect(
+        provider.messages.any(
+          (m) => m.isDivider && m.text == 'Conversation Reconnected',
+        ),
+        isTrue,
+      );
+      expect(provider.awaitingConfirmation, isFalse);
+      expect(provider.pendingConfirmation, isNull);
+      expect(provider.messages.last.text, contains('reconnect'));
+    });
+
     test(
       'confirmBooking appends result, resets successful session, and starts new prompt',
       () async {
