@@ -41,6 +41,8 @@ class _LoginScreenViewState extends State<_LoginScreenView>
   final _emailController = TextEditingController();
   final _emailFocusNode = FocusNode();
   final _passwordController = TextEditingController();
+  var _emailScrollRequestId = 0;
+  double _lastKeyboardInset = 0;
   bool _obscurePassword = true;
 
   @override
@@ -65,7 +67,7 @@ class _LoginScreenViewState extends State<_LoginScreenView>
 
   @override
   void didChangeMetrics() {
-    _scheduleEmailSuggestionScroll();
+    _scheduleEmailSuggestionScroll(immediate: true);
   }
 
   Future<void> _login() async {
@@ -108,7 +110,7 @@ class _LoginScreenViewState extends State<_LoginScreenView>
 
   void _handleEmailInputChanged() {
     if (mounted) setState(() {});
-    _scheduleEmailSuggestionScroll();
+    _scheduleEmailSuggestionScroll(immediate: true);
   }
 
   void _selectEmailOption(String option) {
@@ -119,30 +121,41 @@ class _LoginScreenViewState extends State<_LoginScreenView>
     _emailFocusNode.requestFocus();
   }
 
-  void _scheduleEmailSuggestionScroll() {
+  void _scheduleEmailSuggestionScroll({bool immediate = false}) {
     if (!_emailFocusNode.hasFocus) return;
 
     final optionCount = _emailOptionsFor(_emailController.text).length;
     if (optionCount == 0) return;
+    final requestId = ++_emailScrollRequestId;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollEmailSuggestionsIntoView(optionCount);
+      if (!mounted || requestId != _emailScrollRequestId) return;
+
+      _scrollEmailSuggestionsIntoView(optionCount, immediate: immediate);
       for (final delay in const [
+        Duration(milliseconds: 40),
         Duration(milliseconds: 120),
-        Duration(milliseconds: 280),
-        Duration(milliseconds: 440),
+        Duration(milliseconds: 240),
       ]) {
         Future<void>.delayed(delay, () {
-          if (mounted) _scrollEmailSuggestionsIntoView(optionCount);
+          if (!mounted || requestId != _emailScrollRequestId) return;
+
+          _scrollEmailSuggestionsIntoView(optionCount, immediate: true);
         });
       }
     });
   }
 
-  void _scrollEmailSuggestionsIntoView(int optionCount) {
+  void _scrollEmailSuggestionsIntoView(
+    int optionCount, {
+    required bool immediate,
+  }) {
     if (!mounted || !_scrollController.hasClients) return;
 
-    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    final mediaQuery = MediaQuery.of(context);
+    final keyboardInset = mediaQuery.viewInsets.bottom > 0
+        ? mediaQuery.viewInsets.bottom
+        : (_emailFocusNode.hasFocus ? _lastKeyboardInset : 0.0);
     if (keyboardInset <= 0) return;
 
     final renderObject = _emailFieldKey.currentContext?.findRenderObject();
@@ -157,7 +170,7 @@ class _LoginScreenViewState extends State<_LoginScreenView>
         ? fieldBottom + _emailOptionsGap + optionsHeight
         : fieldBottom;
     final availableBottom =
-        MediaQuery.of(context).size.height - keyboardInset - _emailOptionsGap;
+        mediaQuery.size.height - keyboardInset - _emailOptionsGap;
     final overflow = suggestionsBottom - availableBottom;
 
     if (overflow <= 0) return;
@@ -168,9 +181,14 @@ class _LoginScreenViewState extends State<_LoginScreenView>
             .toDouble();
     if ((targetOffset - _scrollController.offset).abs() < 1) return;
 
+    if (immediate) {
+      _scrollController.jumpTo(targetOffset);
+      return;
+    }
+
     _scrollController.animateTo(
       targetOffset,
-      duration: const Duration(milliseconds: 220),
+      duration: const Duration(milliseconds: 120),
       curve: Curves.easeOutCubic,
     );
   }
@@ -179,6 +197,12 @@ class _LoginScreenViewState extends State<_LoginScreenView>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    if (keyboardInset > 0) {
+      _lastKeyboardInset = keyboardInset;
+    }
+    final reservedKeyboardInset = keyboardInset > 0
+        ? keyboardInset
+        : (_emailFocusNode.hasFocus ? _lastKeyboardInset : 0.0);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -245,7 +269,7 @@ class _LoginScreenViewState extends State<_LoginScreenView>
             SingleChildScrollView(
               controller: _scrollController,
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
-              padding: EdgeInsets.only(bottom: keyboardInset),
+              padding: EdgeInsets.only(bottom: reservedKeyboardInset),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: size.height),
                 child: Column(
