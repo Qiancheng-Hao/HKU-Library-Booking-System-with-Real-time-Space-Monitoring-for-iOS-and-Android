@@ -29,10 +29,10 @@ logger = logging.getLogger(__name__)
 def _import_pika():
     try:
         import pika
-        from pika.exceptions import AMQPConnectionError
+        from pika.exceptions import AMQPError
     except ImportError as exc:
         raise RuntimeError("pika is required for RabbitMQ camera capture.") from exc
-    return pika, AMQPConnectionError
+    return pika, AMQPError
 
 
 @dataclass(frozen=True)
@@ -64,10 +64,25 @@ def _load_enabled_cameras() -> list[CameraStreamConfig]:
 def _close_quietly(resource: Any) -> None:
     if resource is None:
         return
+    if getattr(resource, "is_closed", False):
+        return
     try:
-        resource.close()
+        close = getattr(resource, "close", None)
+        if getattr(resource, "is_open", True) and callable(close):
+            close()
+            return
+        release = getattr(resource, "release", None)
+        if callable(release):
+            release()
     except Exception:
         pass
+
+
+def _open_rabbitmq_channel(pika: Any, queue_name: str) -> tuple[Any, Any]:
+    connection = pika.BlockingConnection(pika.URLParameters(settings.rabbitmq_url))
+    channel = connection.channel()
+    channel.queue_declare(queue=queue_name, durable=True)
+    return connection, channel
 
 
 def _sleep(stop_event: threading.Event, seconds: float) -> None:
@@ -119,20 +134,13 @@ class CameraFramePublisher(threading.Thread):
     def run(self) -> None:
         import cv2
 
-        pika, AMQPConnectionError = _import_pika()
+        pika, AMQPError = _import_pika()
         connection = None
         channel = None
         capture = None
 
         while not self.stop_event.is_set():
             try:
-                if connection is None or connection.is_closed:
-                    connection = pika.BlockingConnection(
-                        pika.URLParameters(settings.rabbitmq_url)
-                    )
-                    channel = connection.channel()
-                    channel.queue_declare(queue=self.queue_name, durable=True)
-
                 if capture is None or not capture.isOpened():
                     stream_url = normalize_stream_url(self.camera.stream_url)
                     logger.info(
@@ -148,6 +156,9 @@ class CameraFramePublisher(threading.Thread):
                         )
                         _close_quietly(capture)
                         capture = None
+                        _close_quietly(connection)
+                        connection = None
+                        channel = None
                         _sleep(self.stop_event, settings.rabbitmq_reconnect_seconds)
                         continue
 
@@ -159,6 +170,9 @@ class CameraFramePublisher(threading.Thread):
                     )
                     _close_quietly(capture)
                     capture = None
+                    _close_quietly(connection)
+                    connection = None
+                    channel = None
                     _sleep(self.stop_event, settings.rabbitmq_reconnect_seconds)
                     continue
 
@@ -180,6 +194,17 @@ class CameraFramePublisher(threading.Thread):
 
                 captured_at = datetime.now(timezone.utc)
                 body = _build_message(self.camera, encoded.tobytes(), captured_at)
+                if (
+                    connection is None
+                    or getattr(connection, "is_closed", True)
+                    or channel is None
+                    or getattr(channel, "is_closed", True)
+                ):
+                    _close_quietly(connection)
+                    connection, channel = _open_rabbitmq_channel(
+                        pika,
+                        self.queue_name,
+                    )
                 channel.basic_publish(
                     exchange="",
                     routing_key=self.queue_name,
@@ -189,11 +214,13 @@ class CameraFramePublisher(threading.Thread):
                         content_type="application/json",
                     ),
                 )
+                connection.process_data_events(time_limit=0)
                 _sleep(self.stop_event, settings.camera_capture_interval_seconds)
-            except AMQPConnectionError:
-                logger.exception(
-                    "rabbitmq publisher connection failed camera=%s",
+            except AMQPError as exc:
+                logger.warning(
+                    "rabbitmq publisher connection reset camera=%s error=%s",
                     self.camera.name,
+                    exc,
                 )
                 _close_quietly(connection)
                 connection = None
@@ -229,7 +256,7 @@ class OccupancyInferenceConsumer(threading.Thread):
         self.stop_event = stop_event
 
     def run(self) -> None:
-        pika, AMQPConnectionError = _import_pika()
+        pika, AMQPError = _import_pika()
 
         while not self.stop_event.is_set():
             connection = None
@@ -292,10 +319,18 @@ class OccupancyInferenceConsumer(threading.Thread):
                             ),
                         )
                         channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+                    except AMQPError:
+                        raise
                     except Exception:
                         logger.exception("rabbitmq inference consumer processing failed")
-                        channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=False)
-            except AMQPConnectionError:
+                        try:
+                            channel.basic_nack(
+                                delivery_tag=method_frame.delivery_tag,
+                                requeue=False,
+                            )
+                        except AMQPError:
+                            raise
+            except AMQPError:
                 logger.exception("rabbitmq inference consumer connection failed")
                 _sleep(self.stop_event, settings.rabbitmq_reconnect_seconds)
             except Exception:
@@ -322,7 +357,7 @@ class OccupancyStatsConsumer(threading.Thread):
         self.stop_event = stop_event
 
     def run(self) -> None:
-        pika, AMQPConnectionError = _import_pika()
+        pika, AMQPError = _import_pika()
 
         while not self.stop_event.is_set():
             connection = None
@@ -394,10 +429,18 @@ class OccupancyStatsConsumer(threading.Thread):
                         )
                         add_stats_event_to_window(event)
                         channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+                    except AMQPError:
+                        raise
                     except Exception:
                         logger.exception("rabbitmq stats consumer processing failed")
-                        channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=False)
-            except AMQPConnectionError:
+                        try:
+                            channel.basic_nack(
+                                delivery_tag=method_frame.delivery_tag,
+                                requeue=False,
+                            )
+                        except AMQPError:
+                            raise
+            except AMQPError:
                 logger.exception("rabbitmq stats consumer connection failed")
                 _sleep(self.stop_event, settings.rabbitmq_reconnect_seconds)
             except Exception:
