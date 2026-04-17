@@ -3,6 +3,7 @@ import '../../features/auth/data/auth_repository.dart';
 import '../../features/home/data/occupancy_repository.dart';
 import '../../features/library/data/library_repository.dart';
 import '../../features/library/data/reservation_repository.dart';
+import '../../features/reports/data/report_repository.dart';
 import '../network/http_api_client.dart';
 
 class AppServices {
@@ -22,4 +23,5 @@ class AppServices {
   static final OccupancyRepository occupancyRepository = OccupancyRepository(
     apiClient,
   );
+  static final ReportRepository reportRepository = ReportRepository(apiClient);
 }

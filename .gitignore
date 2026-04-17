@@ -34,6 +34,7 @@ frontend/.dart_tool/
 frontend/.flutter-plugins-dependencies
 frontend/.pub-cache/
 frontend/.pub/
+frontend/devtools_options.yaml
 frontend/build/
 frontend/coverage/
 

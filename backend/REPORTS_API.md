@@ -8,6 +8,7 @@ This document describes the backend API for the historical crowd data analysis f
 - Authentication: `Bearer Token` required
 - Data source: `occupancy_area_snapshots`
 - Occupancy rate unit: all returned occupancy rate values are percentages in the range `0-100`
+- Timezone: report windows, trend buckets, weekday/hour grouping, and display labels use `DEFAULT_TIMEZONE` (default: `Asia/Hong_Kong`)
 
 This API is designed for frontend visualization of:
 
@@ -41,9 +42,9 @@ All responses include a `scope` object:
 | `scope.location` | `string \| null` | Library filter used for this query |
 | `scope.area` | `string \| null` | Area filter used for this query |
 | `scope.days` | `int` | Lookback window used for this query |
-| `scope.generatedAt` | `datetime` | UTC timestamp when the report was generated |
-| `scope.since` | `datetime` | UTC start time of the reporting window |
-| `scope.until` | `datetime` | UTC end time of the reporting window |
+| `scope.generatedAt` | `datetime` | Timestamp when the report was generated, in `DEFAULT_TIMEZONE` |
+| `scope.since` | `datetime` | Start time of the reporting window, in `DEFAULT_TIMEZONE` |
+| `scope.until` | `datetime` | End time of the reporting window, in `DEFAULT_TIMEZONE` |
 
 ## 1. Summary Report
 

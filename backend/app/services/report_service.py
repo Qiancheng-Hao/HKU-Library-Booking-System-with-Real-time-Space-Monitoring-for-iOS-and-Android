@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Integer, Select, cast, desc, func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.occupancy import AreaOccupancySnapshot
 from app.schemas.reports import (
     ReportBucket,
@@ -30,6 +32,8 @@ _WEEKDAY_NAMES = {
     6: "Saturday",
 }
 
+_REPORT_TZ = ZoneInfo(settings.default_timezone)
+
 
 def _to_percent(value: float | None) -> float | None:
     if value is None:
@@ -44,20 +48,47 @@ def _hour_label(hour: int) -> str:
 
 
 def _normalize_window(days: int) -> tuple[datetime, datetime]:
-    until = datetime.now(timezone.utc)
+    until = datetime.now(_REPORT_TZ)
     since = until - timedelta(days=max(1, int(days)))
     return since, until
 
 
-def _build_scope(*, location: str | None, area: str | None, days: int, since: datetime, until: datetime) -> ReportScope:
+def _local_measured_at_expr():
+    return func.timezone(
+        settings.default_timezone,
+        AreaOccupancySnapshot.measured_at,
+    )
+
+
+def _as_report_time(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=_REPORT_TZ)
+    return value.astimezone(_REPORT_TZ)
+
+
+def _build_scope(
+    *,
+    location: str | None,
+    area: str | None,
+    days: int,
+    since: datetime,
+    until: datetime,
+) -> ReportScope:
     return ReportScope(
         location=location,
         area=area,
         days=days,
-        generatedAt=until,
-        since=since,
-        until=until,
+        generatedAt=_as_report_time(until),
+        since=_as_report_time(since),
+        until=_as_report_time(until),
     )
+
+
+def _bucket_label(bucket_start: datetime, bucket: ReportBucket) -> str:
+    label_format = "%Y-%m-%d %H:%M" if bucket == "hour" else "%Y-%m-%d"
+    return bucket_start.strftime(label_format)
 
 
 def _apply_filters(
@@ -88,7 +119,7 @@ def _load_hour_insight(
     area: str | None,
     descending: bool,
 ) -> ReportHourInsight | None:
-    hour_expr = cast(func.extract("hour", AreaOccupancySnapshot.measured_at), Integer)
+    hour_expr = cast(func.extract("hour", _local_measured_at_expr()), Integer)
     order_expr = desc("avg_rate") if descending else "avg_rate"
     stmt = (
         select(
@@ -132,7 +163,7 @@ def _load_busiest_weekday(
     location: str | None,
     area: str | None,
 ) -> ReportWeekdayInsight | None:
-    weekday_expr = cast(func.extract("dow", AreaOccupancySnapshot.measured_at), Integer)
+    weekday_expr = cast(func.extract("dow", _local_measured_at_expr()), Integer)
     stmt = (
         select(
             weekday_expr.label("weekday"),
@@ -174,7 +205,13 @@ def get_report_summary(
     days: int,
 ) -> ReportSummaryResponse:
     since, until = _normalize_window(days)
-    scope = _build_scope(location=location, area=area, days=days, since=since, until=until)
+    scope = _build_scope(
+        location=location,
+        area=area,
+        days=days,
+        since=since,
+        until=until,
+    )
     stmt = select(
         func.avg(AreaOccupancySnapshot.occupancy_rate).label("avg_rate"),
         func.max(AreaOccupancySnapshot.occupancy_rate).label("peak_rate"),
@@ -202,8 +239,8 @@ def get_report_summary(
         peakOccupancyRate=_to_percent(row.peak_rate),
         totalSampleCount=int(row.total_samples or 0),
         observationCount=int(row.observation_count or 0),
-        firstObservedAt=row.first_observed_at,
-        lastObservedAt=row.last_observed_at,
+        firstObservedAt=_as_report_time(row.first_observed_at),
+        lastObservedAt=_as_report_time(row.last_observed_at),
         busiestWeekday=_load_busiest_weekday(
             db,
             since=since,
@@ -239,9 +276,15 @@ def get_report_trend(
     bucket: ReportBucket,
 ) -> ReportTrendResponse:
     since, until = _normalize_window(days)
-    scope = _build_scope(location=location, area=area, days=days, since=since, until=until)
+    scope = _build_scope(
+        location=location,
+        area=area,
+        days=days,
+        since=since,
+        until=until,
+    )
     trunc_unit = "hour" if bucket == "hour" else "day"
-    bucket_expr = func.date_trunc(trunc_unit, AreaOccupancySnapshot.measured_at)
+    bucket_expr = func.date_trunc(trunc_unit, _local_measured_at_expr())
     stmt = (
         select(
             bucket_expr.label("bucket_start"),
@@ -260,16 +303,20 @@ def get_report_trend(
         area=area,
     )
     rows = db.execute(stmt).all()
-    points = [
-        ReportTrendPoint(
-            bucketStart=row.bucket_start,
-            bucketLabel=row.bucket_start.strftime("%Y-%m-%d %H:%M" if bucket == "hour" else "%Y-%m-%d"),
-            averageOccupancyRate=_to_percent(row.avg_rate) or 0.0,
-            peakOccupancyRate=_to_percent(row.peak_rate) or 0.0,
-            sampleCount=int(row.sample_count or 0),
+    points: list[ReportTrendPoint] = []
+    for row in rows:
+        bucket_start = _as_report_time(row.bucket_start)
+        if bucket_start is None:
+            continue
+        points.append(
+            ReportTrendPoint(
+                bucketStart=bucket_start,
+                bucketLabel=_bucket_label(bucket_start, bucket),
+                averageOccupancyRate=_to_percent(row.avg_rate) or 0.0,
+                peakOccupancyRate=_to_percent(row.peak_rate) or 0.0,
+                sampleCount=int(row.sample_count or 0),
+            )
         )
-        for row in rows
-    ]
     return ReportTrendResponse(scope=scope, bucket=bucket, points=points)
 
 
@@ -281,9 +328,15 @@ def get_report_heatmap(
     days: int,
 ) -> ReportHeatmapResponse:
     since, until = _normalize_window(days)
-    scope = _build_scope(location=location, area=area, days=days, since=since, until=until)
-    weekday_expr = cast(func.extract("dow", AreaOccupancySnapshot.measured_at), Integer)
-    hour_expr = cast(func.extract("hour", AreaOccupancySnapshot.measured_at), Integer)
+    scope = _build_scope(
+        location=location,
+        area=area,
+        days=days,
+        since=since,
+        until=until,
+    )
+    weekday_expr = cast(func.extract("dow", _local_measured_at_expr()), Integer)
+    hour_expr = cast(func.extract("hour", _local_measured_at_expr()), Integer)
     stmt = (
         select(
             weekday_expr.label("weekday"),
@@ -306,7 +359,10 @@ def get_report_heatmap(
     cells = [
         ReportHeatmapCell(
             weekdayIndex=int(row.weekday),
-            weekdayName=_WEEKDAY_NAMES.get(int(row.weekday), f"Day {int(row.weekday)}"),
+            weekdayName=_WEEKDAY_NAMES.get(
+                int(row.weekday),
+                f"Day {int(row.weekday)}",
+            ),
             hour=int(row.hour),
             averageOccupancyRate=_to_percent(row.avg_rate) or 0.0,
             peakOccupancyRate=_to_percent(row.peak_rate) or 0.0,
@@ -326,8 +382,14 @@ def get_report_peak_hours(
     limit: int,
 ) -> ReportPeakHoursResponse:
     since, until = _normalize_window(days)
-    scope = _build_scope(location=location, area=area, days=days, since=since, until=until)
-    hour_expr = cast(func.extract("hour", AreaOccupancySnapshot.measured_at), Integer)
+    scope = _build_scope(
+        location=location,
+        area=area,
+        days=days,
+        since=since,
+        until=until,
+    )
+    hour_expr = cast(func.extract("hour", _local_measured_at_expr()), Integer)
     stmt = (
         select(
             hour_expr.label("hour"),

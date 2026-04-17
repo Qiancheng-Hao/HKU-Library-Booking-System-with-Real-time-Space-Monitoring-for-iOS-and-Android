@@ -8,6 +8,7 @@
 - 认证方式：需要 `Bearer Token`
 - 数据来源：`occupancy_area_snapshots`
 - 占用率单位：接口返回的占用率均为 `0-100` 的百分比，而不是 `0-1`
+- 时区：报表窗口、趋势 bucket、星期/小时分组和展示标签均使用 `DEFAULT_TIMEZONE`（默认：`Asia/Hong_Kong`）
 
 该接口主要用于前端展示以下内容：
 
@@ -41,9 +42,9 @@
 | `scope.location` | `string \| null` | 本次查询使用的图书馆过滤条件 |
 | `scope.area` | `string \| null` | 本次查询使用的区域过滤条件 |
 | `scope.days` | `int` | 本次查询使用的回看天数 |
-| `scope.generatedAt` | `datetime` | 报表生成时间，UTC |
-| `scope.since` | `datetime` | 统计窗口起始时间，UTC |
-| `scope.until` | `datetime` | 统计窗口结束时间，UTC |
+| `scope.generatedAt` | `datetime` | 报表生成时间，使用 `DEFAULT_TIMEZONE` |
+| `scope.since` | `datetime` | 统计窗口起始时间，使用 `DEFAULT_TIMEZONE` |
+| `scope.until` | `datetime` | 统计窗口结束时间，使用 `DEFAULT_TIMEZONE` |
 
 ## 1. Summary Report
 

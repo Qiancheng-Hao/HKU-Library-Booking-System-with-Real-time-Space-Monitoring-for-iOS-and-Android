@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../features/reservations/presentation/screens/reservation_list_screen.dart';
+import '../../../../features/reports/presentation/screens/report_screen.dart';
 import '../widgets/library_list_item.dart';
 import '../../../../theme/app_theme.dart';
 import '../../../../core/ui/widgets/empty_state.dart';
@@ -42,7 +43,7 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
     return ChangeNotifierProvider<LibraryCatalogController>.value(
       value: _controller,
       child: DefaultTabController(
-        length: 2,
+        length: 3,
         child: Consumer<LibraryCatalogController>(
           builder: (context, controller, child) {
             return Column(
@@ -52,7 +53,14 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
                   child: const TabBar(
                     tabs: [
                       Tab(text: 'Book'),
-                      Tab(text: 'My Reservations'),
+                      Tab(text: 'Insights'),
+                      Tab(
+                        child: Text(
+                          'Reservations',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -120,6 +128,7 @@ class _LibraryListScreenState extends State<LibraryListScreen> {
                           ),
                         ],
                       ),
+                      const ReportScreen(),
                       const ReservationListScreen(),
                     ],
                   ),

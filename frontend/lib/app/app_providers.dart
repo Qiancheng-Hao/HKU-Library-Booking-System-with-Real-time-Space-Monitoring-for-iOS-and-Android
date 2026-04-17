@@ -7,6 +7,7 @@ import '../features/auth/data/auth_repository.dart';
 import '../features/home/data/occupancy_repository.dart';
 import '../features/library/data/library_repository.dart';
 import '../features/library/data/reservation_repository.dart';
+import '../features/reports/data/report_repository.dart';
 import '../providers/ai_session_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/notification_provider.dart';
@@ -30,6 +31,7 @@ class AppProviders extends StatelessWidget {
         Provider<OccupancyRepository>.value(
           value: AppServices.occupancyRepository,
         ),
+        Provider<ReportRepository>.value(value: AppServices.reportRepository),
         ChangeNotifierProvider(
           create: (context) =>
               AuthProvider(authRepository: context.read<AuthRepository>()),

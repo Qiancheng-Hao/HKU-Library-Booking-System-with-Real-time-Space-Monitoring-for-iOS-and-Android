@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/models/ai_models.dart';
 import 'package:frontend/core/models/facility.dart';
 import 'package:frontend/core/models/occupancy.dart';
+import 'package:frontend/core/models/report.dart';
 import 'package:frontend/core/models/reservation.dart';
 import 'package:frontend/core/models/time_slot.dart';
 
@@ -146,6 +147,92 @@ void main() {
 
       expect(snapshot.libraries, hasLength(1));
       expect(snapshot.libraries.single.clampedOccupancyRate, 100);
+    });
+  });
+
+  group('Report models', () {
+    test('parses summary insights and optional nested fields', () {
+      final summary = ReportSummary.fromJson({
+        'scope': {
+          'location': 'Main Library',
+          'days': '30',
+          'generatedAt': '2026-04-17T12:00:00+08:00',
+        },
+        'hasData': true,
+        'averageOccupancyRate': '62.41',
+        'peakOccupancyRate': 95.73,
+        'totalSampleCount': '18420',
+        'observationCount': 960,
+        'busiestWeekday': {
+          'weekdayIndex': 2,
+          'weekdayName': 'Tuesday',
+          'averageOccupancyRate': 71.33,
+          'peakOccupancyRate': 95.73,
+          'sampleCount': 2910,
+        },
+        'suggestedLowTrafficHour': {
+          'hour': 9,
+          'label': '09:00-10:00',
+          'averageOccupancyRate': 31.26,
+          'peakOccupancyRate': 48.91,
+          'sampleCount': 910,
+        },
+      });
+
+      expect(summary.scope.location, 'Main Library');
+      expect(summary.scope.days, 30);
+      expect(summary.hasData, isTrue);
+      expect(summary.averageOccupancyRate, 62.41);
+      expect(summary.busiestWeekday?.weekdayName, 'Tuesday');
+      expect(summary.suggestedLowTrafficHour?.label, '09:00-10:00');
+    });
+
+    test('parses trend, heatmap, and peak hour reports', () {
+      final trend = ReportTrend.fromJson({
+        'scope': {'days': 7},
+        'bucket': 'hour',
+        'points': [
+          {
+            'bucketStart': '2026-04-17T09:00:00+08:00',
+            'bucketLabel': '2026-04-17 09:00',
+            'averageOccupancyRate': 41.25,
+            'peakOccupancyRate': 50.38,
+            'sampleCount': 84,
+          },
+        ],
+      });
+      final heatmap = ReportHeatmap.fromJson({
+        'scope': {'days': 30},
+        'cells': [
+          {
+            'weekdayIndex': 1,
+            'weekdayName': 'Monday',
+            'hour': 10,
+            'averageOccupancyRate': 48.73,
+            'peakOccupancyRate': 62.14,
+            'sampleCount': 188,
+          },
+        ],
+      });
+      final peakHours = ReportPeakHours.fromJson({
+        'scope': {'days': 30},
+        'items': [
+          {
+            'rank': 1,
+            'hour': 14,
+            'label': '14:00-15:00',
+            'averageOccupancyRate': 88.13,
+            'peakOccupancyRate': 97.42,
+            'sampleCount': 320,
+          },
+        ],
+      });
+
+      expect(trend.points.single.bucketLabel, '2026-04-17 09:00');
+      expect(trend.points.single.bucketStart, DateTime(2026, 4, 17, 9));
+      expect(heatmap.cells.single.hourLabel, '10:00');
+      expect(peakHours.items.single.rank, 1);
+      expect(peakHours.items.single.averageOccupancyRate, 88.13);
     });
   });
 
