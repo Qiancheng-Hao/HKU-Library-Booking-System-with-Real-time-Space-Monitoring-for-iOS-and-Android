@@ -9,6 +9,7 @@ This backend is a FastAPI service for the HKU Library Booking System. It provide
 - reservation creation, cancellation, and personal reservation lookup
 - AI-assisted booking session orchestration
 - real-time occupancy lookup and recommendation APIs
+- historical occupancy analytics and reporting APIs
 - optional background jobs for camera capture and occupancy aggregation
 
 The application entrypoint is [main.py](file:///e:/work/COMP4801/HKU-Library-Booking-System-with-Real-time-Space-Monitoring-for-iOS-and-Android-1/backend/app/main.py).
@@ -43,15 +44,28 @@ After startup:
 - ReDoc: `http://127.0.0.1:8000/redoc`
 - Health check: `http://127.0.0.1:8000/health`
 
+For a lighter local setup, optional integrations can be disabled in `backend/.env`:
+
+```env
+OCCUPANCY_TIMESCALE_ENABLED=false
+OCCUPANCY_CACHE_ENABLED=false
+CAMERA_CAPTURE_ENABLED=false
+CAMERA_CAPTURE_USE_RABBITMQ=false
+```
+
 ## Database Setup
 
 - The backend uses `DATABASE_URL` to connect to PostgreSQL.
 - On startup, `Base.metadata.create_all(...)` creates tables defined by the current SQLAlchemy models.
+- On PostgreSQL, startup also applies base occupancy schema updates such as idempotent indexes and columns used by the occupancy pipeline.
 - When `OCCUPANCY_TIMESCALE_ENABLED=true`, startup also attempts to:
   - enable TimescaleDB extension
   - convert occupancy tables to hypertables
   - apply retention and compression policies
-  - create continuous aggregate rollup (optional)
+  - create continuous aggregate rollup `occupancy_area_snapshots_1m` when `OCCUPANCY_ROLLUP_ENABLED=true`
+  - create report aggregate views when `OCCUPANCY_REPORTS_AGGREGATES_ENABLED=true`
+    - `occupancy_reports_30m` for trend queries
+    - `occupancy_reports_1h` for summary, heatmap, and peak-hours queries
 - Seed data for libraries, facility types, aliases, and facilities is provided in [seed_library_facility_data.sql](file:///e:/work/COMP4801/HKU-Library-Booking-System-with-Real-time-Space-Monitoring-for-iOS-and-Android-1/backend/seed_library_facility_data.sql).
 
 Typical local flow:
@@ -98,12 +112,22 @@ Current router groups:
 - Occupancy
   - `POST /api/<version>/occupancy/occupancy`
   - `POST /api/<version>/occupancy/recommendation`
+- Reports
+  - `GET /api/<version>/reports/summary`
+  - `GET /api/<version>/reports/trend`
+  - `GET /api/<version>/reports/heatmap`
+  - `GET /api/<version>/reports/peak-hours`
 
 For exact request and response schemas, use the OpenAPI docs at `/docs`.
 
 ## Startup Behavior
 
 When the service starts, it can launch several background tasks in addition to the HTTP API:
+
+- occupancy storage initialization
+  - runs once during startup
+  - applies base occupancy schema fixes on PostgreSQL
+  - optionally initializes TimescaleDB hypertables, retention/compression policies, and report aggregate views
 
 - reservation cleanup job
   - runs every hour at minute `0, 15, 30, 45`
@@ -184,6 +208,17 @@ Environment variable names are case-insensitive.
 - `OCCUPANCY_LOG_COMPRESSION_AFTER_DAYS` default `2`
 - `OCCUPANCY_SNAPSHOT_COMPRESSION_AFTER_DAYS` default `7`
 - `OCCUPANCY_ROLLUP_ENABLED` default `true`
+- `OCCUPANCY_REPORTS_AGGREGATES_ENABLED` default `true`
+- `OCCUPANCY_REPORTS_30M_VIEW_NAME` default `occupancy_reports_30m`
+- `OCCUPANCY_REPORTS_30M_BUCKET_INTERVAL` default `30 minutes`
+- `OCCUPANCY_REPORTS_30M_START_OFFSET` default `30 days`
+- `OCCUPANCY_REPORTS_30M_END_OFFSET` default `30 minutes`
+- `OCCUPANCY_REPORTS_30M_SCHEDULE_INTERVAL` default `15 minutes`
+- `OCCUPANCY_REPORTS_1H_VIEW_NAME` default `occupancy_reports_1h`
+- `OCCUPANCY_REPORTS_1H_BUCKET_INTERVAL` default `1 hour`
+- `OCCUPANCY_REPORTS_1H_START_OFFSET` default `180 days`
+- `OCCUPANCY_REPORTS_1H_END_OFFSET` default `1 hour`
+- `OCCUPANCY_REPORTS_1H_SCHEDULE_INTERVAL` default `1 hour`
 - `REDIS_URL` default `redis://localhost:6379/0`
 
 ### Camera Capture
@@ -266,6 +301,17 @@ OCCUPANCY_SNAPSHOT_RETENTION_DAYS=180
 OCCUPANCY_LOG_COMPRESSION_AFTER_DAYS=2
 OCCUPANCY_SNAPSHOT_COMPRESSION_AFTER_DAYS=7
 OCCUPANCY_ROLLUP_ENABLED=true
+OCCUPANCY_REPORTS_AGGREGATES_ENABLED=true
+OCCUPANCY_REPORTS_30M_VIEW_NAME=occupancy_reports_30m
+OCCUPANCY_REPORTS_30M_BUCKET_INTERVAL=30 minutes
+OCCUPANCY_REPORTS_30M_START_OFFSET=30 days
+OCCUPANCY_REPORTS_30M_END_OFFSET=30 minutes
+OCCUPANCY_REPORTS_30M_SCHEDULE_INTERVAL=15 minutes
+OCCUPANCY_REPORTS_1H_VIEW_NAME=occupancy_reports_1h
+OCCUPANCY_REPORTS_1H_BUCKET_INTERVAL=1 hour
+OCCUPANCY_REPORTS_1H_START_OFFSET=180 days
+OCCUPANCY_REPORTS_1H_END_OFFSET=1 hour
+OCCUPANCY_REPORTS_1H_SCHEDULE_INTERVAL=1 hour
 REDIS_URL=redis://localhost:6379/0
 
 CAMERA_CAPTURE_ENABLED=false
@@ -296,4 +342,5 @@ CV_SEAT_MODEL_PATH=../computer_vision/model/mixed/model_v3/best.pt
 - The backend automatically exposes OpenAPI docs through FastAPI.
 - AI endpoints depend on the upstream AI agent being reachable at `AI_AGENT_BASE_URL`.
 - Occupancy endpoints can run without camera capture enabled, but they are only useful when occupancy snapshot data already exists.
+- Reports endpoints read historical occupancy snapshots and prefer TimescaleDB continuous aggregates when available; if aggregate views are disabled or unavailable, the service falls back to raw `occupancy_area_snapshots`.
 - `/health` now includes dependency checks for RabbitMQ, Redis, and TimescaleDB initialization/runtime state.

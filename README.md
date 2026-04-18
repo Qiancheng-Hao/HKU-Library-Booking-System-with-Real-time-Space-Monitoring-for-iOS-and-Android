@@ -3,7 +3,7 @@
 Full-stack HKU library booking platform with four major parts:
 
 - a Flutter mobile app for booking and occupancy viewing
-- a FastAPI backend for authentication, reservations, AI orchestration, and occupancy APIs
+- a FastAPI backend for authentication, reservations, AI orchestration, occupancy, and reporting APIs
 - a standalone AI booking agent service for natural-language booking flows
 - computer-vision tooling for seat and space occupancy detection
 
@@ -17,6 +17,7 @@ The repository also includes local infrastructure and streaming configs for Post
 - AI-assisted booking conversations
 - Notification reminders for upcoming bookings
 - Real-time occupancy lookup and recommendation APIs
+- Historical occupancy analytics and reporting APIs
 - Camera / CV driven occupancy processing pipeline
 
 ## System Overview
@@ -183,6 +184,15 @@ Then update `backend/.env`:
 - `AI_AGENT_SHARED_SECRET` if you want backend <-> AI service auth
 - Redis / RabbitMQ / occupancy flags if you are enabling the occupancy pipeline
 
+For a lighter local backend setup, you can disable optional integrations:
+
+```env
+OCCUPANCY_TIMESCALE_ENABLED=false
+OCCUPANCY_CACHE_ENABLED=false
+CAMERA_CAPTURE_ENABLED=false
+CAMERA_CAPTURE_USE_RABBITMQ=false
+```
+
 Start the backend:
 
 ```bash
@@ -215,6 +225,8 @@ If you are using the Docker PostgreSQL service from this repo, adjust the port t
 - user reservation history
 - AI session orchestration APIs
 - occupancy snapshot and recommendation APIs
+- historical occupancy report APIs
+- health checks for Redis, RabbitMQ, and TimescaleDB initialization/runtime state
 - optional background jobs for capture, inference, and aggregation
 
 ## Frontend Setup
@@ -360,6 +372,7 @@ Key toggles live in `backend/.env`:
 - `CAMERA_CAPTURE_ENABLED`
 - `CAMERA_CAPTURE_USE_RABBITMQ`
 - `OCCUPANCY_TIMESCALE_ENABLED`
+- `OCCUPANCY_REPORTS_AGGREGATES_ENABLED`
 
 ## Recommended Local Bring-Up Order
 
