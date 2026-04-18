@@ -2,6 +2,9 @@ api: no
 metrics: no
 pprof: no
 
+readTimeout: 60s
+writeTimeout: 60s
+
 rtspAddress: :8554
 rtmpAddress: :1935
 webrtcAddress: :8889

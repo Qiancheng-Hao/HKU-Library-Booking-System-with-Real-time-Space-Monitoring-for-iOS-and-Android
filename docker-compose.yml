@@ -65,10 +65,10 @@ services:
       -reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1
       -reconnect_delay_max 5 -re -stream_loop -1
       -i https://fyp.tos-cn-hongkong.volces.com/stream1.mp4
-      -an -vf scale=640:360,fps=1 -r 1
-      -c:v libx264 -profile:v baseline -level 3.1
+      -an -vf fps=1,scale=1280:720 -r 1
+      -c:v libx264 -profile:v baseline -level 4.0
       -preset ultrafast -tune zerolatency
-      -b:v 200k -bufsize 400k -g 30
+      -b:v 1500k -bufsize 3000k -g 10
       -f flv rtmp://mediamtx:1935/stream1
 
   stream2:
@@ -83,10 +83,10 @@ services:
       -reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1
       -reconnect_delay_max 5 -re -stream_loop -1
       -i https://fyp.tos-cn-hongkong.volces.com/stream2.mp4
-      -an -vf scale=640:360,fps=1 -r 1
-      -c:v libx264 -profile:v baseline -level 3.1
+      -an -vf fps=1,scale=1280:720 -r 1
+      -c:v libx264 -profile:v baseline -level 4.0
       -preset ultrafast -tune zerolatency
-      -b:v 200k -bufsize 400k -g 30
+      -b:v 1500k -bufsize 3000k -g 10
       -f flv rtmp://mediamtx:1935/stream2
 
   stream3:
@@ -101,10 +101,10 @@ services:
       -reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1
       -reconnect_delay_max 5 -re -stream_loop -1
       -i https://fyp.tos-cn-hongkong.volces.com/stream3.mp4
-      -an -vf scale=640:360,fps=1 -r 1
-      -c:v libx264 -profile:v baseline -level 3.1
+      -an -vf fps=1,scale=1280:720 -r 1
+      -c:v libx264 -profile:v baseline -level 4.0
       -preset ultrafast -tune zerolatency
-      -b:v 200k -bufsize 400k -g 30
+      -b:v 1500k -bufsize 3000k -g 10
       -f flv rtmp://mediamtx:1935/stream3
 
   stream4:
@@ -119,10 +119,10 @@ services:
       -reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1
       -reconnect_delay_max 5 -re -stream_loop -1
       -i https://fyp.tos-cn-hongkong.volces.com/stream4.mp4
-      -an -vf scale=640:360,fps=1 -r 1
-      -c:v libx264 -profile:v baseline -level 3.1
+      -an -vf fps=1,scale=1280:720 -r 1
+      -c:v libx264 -profile:v baseline -level 4.0
       -preset ultrafast -tune zerolatency
-      -b:v 200k -bufsize 400k -g 30
+      -b:v 1500k -bufsize 3000k -g 10
       -f flv rtmp://mediamtx:1935/stream4
 
 volumes:

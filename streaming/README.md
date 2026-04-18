@@ -63,10 +63,10 @@ The `stream1` service is equivalent to running MediaMTX and then pushing:
 
 ```bash
 ffmpeg -re -stream_loop -1 -i https://fyp.tos-cn-hongkong.volces.com/stream1.mp4 \
-  -an -vf "scale=640:360,fps=1" -r 1 \
-  -c:v libx264 -profile:v baseline -level 3.1 \
+  -an -vf "fps=1,scale=1280:720" -r 1 \
+  -c:v libx264 -profile:v baseline -level 4.0 \
   -preset ultrafast -tune zerolatency \
-  -b:v 200k -bufsize 400k -g 30 \
+  -b:v 1500k -bufsize 3000k -g 10 \
   -f flv rtmp://127.0.0.1:1935/stream1
 ```
 
