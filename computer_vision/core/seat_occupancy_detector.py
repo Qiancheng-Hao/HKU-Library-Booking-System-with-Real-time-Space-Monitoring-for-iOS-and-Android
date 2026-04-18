@@ -53,16 +53,66 @@ class SeatOccupancyDetector:
         Returns:
             np.ndarray: Preprocessed image
         """
-        # !!! need to use more advanced preprocessing later !!!
-        # can detect the image quality first and then decide which preprocessing to apply
-        # call different preprocessing function for different scenarios (e.g., low light, glare, shadows, etc.)
-        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        # Reflection and glass glare cannot be fully removed by preprocessing.
+        # The safest approach here is to compress extreme highlights without
+        # blurring the scene structure, so valid object edges stay detectable.
+        if image is None or image.size == 0:
+            return image
+
+        working = image.copy()
+        hsv = cv2.cvtColor(working, cv2.COLOR_BGR2HSV)
+        lab = cv2.cvtColor(working, cv2.COLOR_BGR2LAB)
+
+        _, s, v = cv2.split(hsv)
         l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+
+        # Bright and low-saturation regions are strong candidates for glare on
+        # glass, glossy screens, or polished tables.
+        glare_mask_hsv = cv2.inRange(hsv, (0, 0, 210), (180, 75, 255))
+        glare_mask_lab = cv2.inRange(l, 220, 255)
+        glare_mask = cv2.bitwise_and(glare_mask_hsv, glare_mask_lab)
+
+        kernel = np.ones((3, 3), np.uint8)
+        glare_mask = cv2.morphologyEx(glare_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+        glare_mask = cv2.GaussianBlur(glare_mask, (0, 0), sigmaX=2, sigmaY=2)
+
+        # Only apply suppression when the glare mask is meaningful but not
+        # large enough to dominate the frame.
+        glare_coverage = float(np.mean(glare_mask > 0))
+        if 0.002 < glare_coverage < 0.35:
+            mask_float = glare_mask.astype(np.float32) / 255.0
+            hsv_float = hsv.astype(np.float32)
+
+            # Build a smooth local brightness reference from the value channel
+            # only. This reduces blown-out reflections without flattening edges.
+            local_v = cv2.GaussianBlur(hsv_float[:, :, 2], (0, 0), sigmaX=7, sigmaY=7)
+            highlight_cap = 0.78 * local_v + 24.0
+            compressed_v = np.minimum(hsv_float[:, :, 2], highlight_cap)
+
+            suppression_strength = 0.75
+            hsv_float[:, :, 2] = (
+                hsv_float[:, :, 2] * (1.0 - mask_float * suppression_strength) +
+                compressed_v * (mask_float * suppression_strength)
+            )
+
+            # Reflections are usually weak in saturation; compressing saturation
+            # inside the glare mask reduces false texture without blurring.
+            hsv_float[:, :, 1] = hsv_float[:, :, 1] * (1.0 - 0.25 * mask_float)
+            working = cv2.cvtColor(hsv_float.clip(0, 255).astype(np.uint8), cv2.COLOR_HSV2BGR)
+
+        # Apply contrast enhancement after glare suppression so we do not
+        # strengthen reflections again.
+        lab = cv2.cvtColor(working, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         l = clahe.apply(l)
         enhanced = cv2.merge([l, a, b])
         enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
-        return enhanced
+
+        # A light unsharp mask restores local edges that CLAHE can soften.
+        blurred = cv2.GaussianBlur(enhanced, (0, 0), sigmaX=1.0, sigmaY=1.0)
+        sharpened = cv2.addWeighted(enhanced, 1.12, blurred, -0.12, 0)
+        return sharpened
     
     # Utility Functions
     @staticmethod 
@@ -157,7 +207,121 @@ class SeatOccupancyDetector:
         px, py = point
         return x1 <= px <= x2 and y1 <= py <= y2
 
-    def cluster_items(self, item_boxes: List, item_cluster_threshold: float) -> List[List]:
+    @staticmethod
+    def get_box_size(box: List[float]) -> Tuple[float, float]:
+        """
+        Get width and height of a bounding box.
+        Args:
+            box: Bounding box [x1, y1, x2, y2]
+
+        Returns:
+            Tuple[float, float]: (width, height)
+        """
+        x1, y1, x2, y2 = box
+        return max(0.0, x2 - x1), max(0.0, y2 - y1)
+
+    @staticmethod
+    def calculate_box_distance(box1: List[float], box2: List[float]) -> float:
+        """
+        Calculate the minimum edge-to-edge distance between two boxes.
+        Returns 0 when the boxes overlap or touch.
+        """
+        x1_1, y1_1, x2_1, y2_1 = box1
+        x1_2, y1_2, x2_2, y2_2 = box2
+
+        horizontal_gap = max(x1_2 - x2_1, x1_1 - x2_2, 0.0)
+        vertical_gap = max(y1_2 - y2_1, y1_1 - y2_2, 0.0)
+
+        return np.sqrt(horizontal_gap ** 2 + vertical_gap ** 2)
+
+    def is_item_associated_with_person(
+        self,
+        item_box: List[float],
+        person_box: List[float],
+        proximity_threshold: float,
+        person_expansion_factor: float = 1.2,
+        use_adaptive_proximity: bool = True,
+        adaptive_proximity_scale: float = 0.45,
+        adaptive_proximity_min: float = 60.0,
+        adaptive_proximity_max: float = 220.0
+    ) -> bool:
+        """
+        Decide whether an item should be treated as belonging to a nearby person.
+
+        The check is intentionally more permissive than a pure center-to-center
+        distance because small items can be visually close to a person while
+        still being far away from the person's box center.
+        """
+        if self.calculate_iou(item_box, person_box) > 0.0:
+            return True
+
+        item_center = self.get_box_center(item_box)
+        if self.is_point_in_box(item_center, person_box, expansion_factor=person_expansion_factor):
+            return True
+
+        person_width, person_height = self.get_box_size(person_box)
+        item_width, item_height = self.get_box_size(item_box)
+
+        effective_threshold = proximity_threshold
+        if use_adaptive_proximity:
+            person_based_threshold = np.clip(
+                adaptive_proximity_scale * max(person_width, person_height),
+                adaptive_proximity_min,
+                adaptive_proximity_max
+            )
+            effective_threshold = max(effective_threshold, person_based_threshold)
+
+        effective_threshold = max(
+            effective_threshold,
+            0.50 * max(item_width, item_height),
+        )
+
+        return self.calculate_box_distance(item_box, person_box) < effective_threshold
+
+    def get_adaptive_item_cluster_threshold(
+        self,
+        box1: List[float],
+        box2: List[float],
+        item_cluster_threshold: float,
+        use_adaptive_item_clustering: bool = True,
+        adaptive_item_cluster_scale: float = 0.80,
+        adaptive_item_cluster_min: float = 40.0,
+        adaptive_item_cluster_max: float = 180.0
+    ) -> float:
+        """
+        Calculate the effective clustering threshold for a pair of items.
+
+        Small items should not be merged too aggressively, while larger items
+        on the same desk region often need a wider merge distance.
+        """
+        effective_threshold = item_cluster_threshold
+
+        if not use_adaptive_item_clustering:
+            return effective_threshold
+
+        width1, height1 = self.get_box_size(box1)
+        width2, height2 = self.get_box_size(box2)
+        average_item_size = (
+            max(width1, height1) + max(width2, height2)
+        ) / 2.0
+
+        item_based_threshold = np.clip(
+            adaptive_item_cluster_scale * average_item_size,
+            adaptive_item_cluster_min,
+            adaptive_item_cluster_max
+        )
+
+        return max(effective_threshold, item_based_threshold)
+
+    def cluster_items(
+        self,
+        item_boxes: List,
+        item_cluster_threshold: float,
+        use_adaptive_item_clustering: bool = True,
+        adaptive_item_cluster_scale: float = 0.80,
+        adaptive_item_cluster_min: float = 40.0,
+        adaptive_item_cluster_max: float = 180.0
+    ) -> List[List]:
         """
         Cluster items that are close together
         Args:
@@ -192,6 +356,7 @@ class SeatOccupancyDetector:
                     
                     # Check minimum distance between any items in the two clusters
                     min_distance = float('inf')
+                    effective_threshold = item_cluster_threshold
                     for box1 in current_cluster:
                         for box2 in clusters[j]:
                             dist = self.get_distance(
@@ -199,9 +364,21 @@ class SeatOccupancyDetector:
                                 self.get_box_center(box2)
                             )
                             min_distance = min(min_distance, dist)
+                            effective_threshold = max(
+                                effective_threshold,
+                                self.get_adaptive_item_cluster_threshold(
+                                    box1,
+                                    box2,
+                                    item_cluster_threshold,
+                                    use_adaptive_item_clustering=use_adaptive_item_clustering,
+                                    adaptive_item_cluster_scale=adaptive_item_cluster_scale,
+                                    adaptive_item_cluster_min=adaptive_item_cluster_min,
+                                    adaptive_item_cluster_max=adaptive_item_cluster_max
+                                )
+                            )
                     
                     # If clusters are close enough, merge them
-                    if min_distance < item_cluster_threshold:
+                    if min_distance < effective_threshold:
                         merged_cluster.extend(clusters[j])
                         used.add(j)
                         merged = True
@@ -388,15 +565,26 @@ class SeatOccupancyDetector:
             76  # cell phone
             ],
         seat_class_id: list = [56, 57],
-        confidence_threshold: float = 0.5,
-        proximity_threshold: float = 100.0,
-        item_cluster_threshold: float = 150.0,
-        seat_expansion_factor: float = 1.5,
+        confidence_threshold: float = 0.4,
+        person_confidence_threshold: float = None,
+        item_confidence_threshold: float = None,
+        seat_confidence_threshold: float = None,
+        proximity_threshold: float = 150.0,
+        use_adaptive_proximity: bool = True,
+        adaptive_proximity_scale: float = 0.45,
+        adaptive_proximity_min: float = 60.0,
+        adaptive_proximity_max: float = 220.0,
+        item_cluster_threshold: float = 70.0,
+        use_adaptive_item_clustering: bool = True,
+        adaptive_item_cluster_scale: float = 0.80,
+        adaptive_item_cluster_min: float = 40.0,
+        adaptive_item_cluster_max: float = 180.0,
+        seat_expansion_factor: float = 3.0,
         use_preprocessing: bool = False,
         visualize: bool = False,
         output_path: str = "detection_result.jpg",
-        imgsz: int = 640,
-        seat_imgsz: int = 640,
+        imgsz: int = 960,
+        seat_imgsz: int = 960,
         location: str = "",
         area: str = ""
     ) -> Dict:
@@ -418,6 +606,14 @@ class SeatOccupancyDetector:
         Returns:
             Dict with occupancy stats (only counting items on seats)
         """
+        # Keep backward compatibility with the previous single-threshold API.
+        if person_confidence_threshold is None:
+            person_confidence_threshold = confidence_threshold
+        if item_confidence_threshold is None:
+            item_confidence_threshold = confidence_threshold
+        if seat_confidence_threshold is None:
+            seat_confidence_threshold = confidence_threshold
+
         # Preprocessing (optional but strongly recommended)
         if use_preprocessing:
             if self.debug_mode: logging.info("Applying image preprocessing...")
@@ -436,14 +632,14 @@ class SeatOccupancyDetector:
             conf = float(det.conf[0].cpu().numpy()) # det.conf = tensor([0.95], device='cuda:0')
             cls_id = int(det.cls[0].cpu().numpy())
 
-            # Apply confidence threshold
-            if conf < confidence_threshold:
-                continue
-                
             box = det.xyxy[0].cpu().numpy() # det.xyxy = tensor([[10.1, 20.2, 30.3, 40.4]], device='cuda:0')
             if cls_id == person_class_id:
+                if conf < person_confidence_threshold:
+                    continue
                 persons_boxes.append(box)
             elif cls_id in hogging_item_class_id:
+                if conf < item_confidence_threshold:
+                    continue
                 objects_boxes.append(box)
 
         # Run Seat Model (seats)
@@ -456,24 +652,26 @@ class SeatOccupancyDetector:
             conf = float(det.conf[0].cpu().numpy())
             cls_id = int(det.cls[0].cpu().numpy())
             
-            # Use same confidence threshold for seats
-            if conf >= confidence_threshold and cls_id in seat_class_id:
+            if conf >= seat_confidence_threshold and cls_id in seat_class_id:
                 seat_boxes.append(det.xyxy[0].cpu().numpy())
 
-        # Filter items associated with persons
-        person_centers = [self.get_box_center(box) for box in persons_boxes]
-        
+        # Filter out items that still belong to a nearby person.
         lone_items = [] # items not associated with persons
         associated_items = [] # items associated with persons
 
-        
         for item_box in objects_boxes:
             is_associated = False # Assume not associated
-            item_center = self.get_box_center(item_box)
-            
-            for person_center in person_centers:
-                distance = self.get_distance(item_center, person_center)
-                if distance < proximity_threshold:
+
+            for person_box in persons_boxes:
+                if self.is_item_associated_with_person(
+                    item_box,
+                    person_box,
+                    proximity_threshold,
+                    use_adaptive_proximity=use_adaptive_proximity,
+                    adaptive_proximity_scale=adaptive_proximity_scale,
+                    adaptive_proximity_min=adaptive_proximity_min,
+                    adaptive_proximity_max=adaptive_proximity_max
+                ):
                     is_associated = True
                     break
             
@@ -490,7 +688,14 @@ class SeatOccupancyDetector:
         )
         
         # Cluster items that are on seats
-        hogging_item_clusters = self.cluster_items(items_on_seats, item_cluster_threshold)
+        hogging_item_clusters = self.cluster_items(
+            items_on_seats,
+            item_cluster_threshold,
+            use_adaptive_item_clustering=use_adaptive_item_clustering,
+            adaptive_item_cluster_scale=adaptive_item_cluster_scale,
+            adaptive_item_cluster_min=adaptive_item_cluster_min,
+            adaptive_item_cluster_max=adaptive_item_cluster_max
+        )
         
         # Calculate totals (only count items ON seats)
         person_count = len(persons_boxes)
@@ -528,7 +733,7 @@ class SeatOccupancyDetector:
             #"hogging_item_count_associated": len(associated_items),
             #"total_items_detected": len(objects_boxes),
             "total_number_of_seats": len(seat_boxes),
-            "occupancy_rate": min((person_count + hogging_region_count) / len(seat_boxes) if len(seat_boxes) > 0 else -1.0, 1.0),
+            "occupancy_rate": (person_count + hogging_region_count) / len(seat_boxes) if len(seat_boxes) > 0 else -1.0,
             # "thresholds_used": {
             #     "confidence": confidence_threshold,
             #     "proximity_pixels": proximity_threshold,
@@ -552,7 +757,7 @@ class SeatOccupancyDetector:
         self,
         image: np.ndarray,
         seat_class_id: list = [56, 57],
-        confidence_threshold: float = 0.5,
+        confidence_threshold: float = 0.4,
         use_preprocessing: bool = False,
         visualize: bool = False,
         output_path: str = "total_seats_result.jpg",

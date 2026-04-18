@@ -52,6 +52,30 @@ def get_all_videos(folder_path: str) -> list[str]:
     return sorted(video_files)
 
 
+def prepare_test_frame(frame: cv2.typing.MatLike) -> cv2.typing.MatLike:
+    """Resize small test inputs before inference while preserving aspect ratio.
+
+    This is a test-time only helper for small-target scenes. It avoids stretching
+    the image and only upsamples when the shorter side is below the configured
+    minimum.
+    """
+    if not ENABLE_TEST_UPSCALE:
+        return frame
+
+    height, width = frame.shape[:2]
+    short_side = min(height, width)
+
+    if short_side >= MIN_TEST_IMAGE_SIDE:
+        return frame
+
+    scale = MIN_TEST_IMAGE_SIDE / short_side
+    new_width = int(round(width * scale))
+    new_height = int(round(height * scale))
+
+    interpolation = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
+    return cv2.resize(frame, (new_width, new_height), interpolation=interpolation)
+
+
 def test_images_dual_model(
     image_files: list[str], 
     occupancy_model_path: str,
@@ -88,18 +112,24 @@ def test_images_dual_model(
         if image is None:
             print(f"Warning: Failed to load image {image_path}")
             continue
+
+        prepared_image = prepare_test_frame(image)
         
         output_path = os.path.join(result_folder, base_name)
         
         result = detector.get_occupancy_stats_with_seats(
-            image,
+            prepared_image,
             person_class_id=person_class_id,
             hogging_item_class_id=hogging_item_class_id,
             seat_class_id=seat_class_id, 
             proximity_threshold=PROXIMITY_THRESHOLD,
             item_cluster_threshold=ITEM_CLUSTER_THRESHOLD,
             confidence_threshold=CONFIDENCE_THRESHOLD,
+            person_confidence_threshold=PERSON_CONFIDENCE_THRESHOLD,
+            item_confidence_threshold=ITEM_CONFIDENCE_THRESHOLD,
+            seat_confidence_threshold=SEAT_CONFIDENCE_THRESHOLD,
             seat_expansion_factor=SEAT_EXPANSION_FACTOR, 
+            use_preprocessing=USE_PREPROCESSING,
             visualize=True,
             output_path=output_path,
             imgsz=IMAGE_SIZE,
@@ -175,17 +205,22 @@ def test_videos_dual_model(
                 break
             
             frame_count += 1
+            prepared_frame = prepare_test_frame(frame)
             
             # Process frame with detector (no output_path to avoid disk I/O)
             result = detector.get_occupancy_stats_with_seats(
-                frame,
+                prepared_frame,
                 person_class_id=person_class_id,
                 hogging_item_class_id=hogging_item_class_id,
                 seat_class_id=seat_class_id,
                 proximity_threshold=PROXIMITY_THRESHOLD,
                 item_cluster_threshold=ITEM_CLUSTER_THRESHOLD,
                 confidence_threshold=CONFIDENCE_THRESHOLD,
+                person_confidence_threshold=PERSON_CONFIDENCE_THRESHOLD,
+                item_confidence_threshold=ITEM_CONFIDENCE_THRESHOLD,
+                seat_confidence_threshold=SEAT_CONFIDENCE_THRESHOLD,
                 seat_expansion_factor=SEAT_EXPANSION_FACTOR,
+                use_preprocessing=USE_PREPROCESSING,
                 visualize=True,
                 output_path="", 
                 imgsz=IMAGE_SIZE,
@@ -230,25 +265,31 @@ if __name__ == "__main__":
     PROXIMITY_THRESHOLD = float(os.getenv('PROXIMITY_THRESHOLD', '150.0'))
     ITEM_CLUSTER_THRESHOLD = float(os.getenv('ITEM_CLUSTER_THRESHOLD', '70.0'))
     SEAT_EXPANSION_FACTOR = int(os.getenv('SEAT_EXPANSION_FACTOR', '3'))
-    IMAGE_SIZE = int(os.getenv('IMAGE_SIZE', '640'))
-    SEAT_IMAGE_SIZE = int(os.getenv('SEAT_IMAGE_SIZE', '640'))
+    IMAGE_SIZE = int(os.getenv('IMAGE_SIZE', '960'))
+    SEAT_IMAGE_SIZE = int(os.getenv('SEAT_IMAGE_SIZE', str(IMAGE_SIZE)))
     CONFIDENCE_THRESHOLD = float(os.getenv('CONFIDENCE_THRESHOLD', '0.4'))
+    PERSON_CONFIDENCE_THRESHOLD = float(os.getenv('PERSON_CONFIDENCE_THRESHOLD', str(CONFIDENCE_THRESHOLD)))
+    ITEM_CONFIDENCE_THRESHOLD = float(os.getenv('ITEM_CONFIDENCE_THRESHOLD', str(CONFIDENCE_THRESHOLD)))
+    SEAT_CONFIDENCE_THRESHOLD = float(os.getenv('SEAT_CONFIDENCE_THRESHOLD', str(CONFIDENCE_THRESHOLD)))
+    USE_PREPROCESSING = os.getenv('USE_PREPROCESSING', 'False').lower() == 'true'
+    ENABLE_TEST_UPSCALE = os.getenv('ENABLE_TEST_UPSCALE', 'True').lower() == 'true'
+    MIN_TEST_IMAGE_SIDE = int(os.getenv('MIN_TEST_IMAGE_SIDE', '900'))
     DEBUG_MODE = os.getenv('DEBUG_MODE', 'False').lower() == 'true'
     DEVICE = os.getenv('DEVICE', 'auto')
     
     # Model paths (loaded from .env)
     standard_occupancy_model = os.path.join(computer_vision_dir, os.getenv('STANDARD_OCCUPANCY_MODEL_PATH', 'train_models/yolo11l.pt'))
     standard_seat_model = os.path.join(computer_vision_dir, os.getenv('STANDARD_SEAT_MODEL_PATH', 'train_models/yolo11l.pt'))
-    custom_occupancy_model = os.path.join(computer_vision_dir, os.getenv('CUSTOM_OCCUPANCY_MODEL_PATH', 'models/mixed/model_v3/best.pt'))
-    custom_seat_model = os.path.join(computer_vision_dir, os.getenv('CUSTOM_SEAT_MODEL_PATH', 'models/mixed/model_v3/best.pt'))
+    custom_occupancy_model = os.path.join(computer_vision_dir, os.getenv('CUSTOM_OCCUPANCY_MODEL_PATH', 'models/mixed/model_v2/best.pt'))
+    custom_seat_model = os.path.join(computer_vision_dir, os.getenv('CUSTOM_SEAT_MODEL_PATH', 'models/mixed/model_v2/best.pt'))
     
     # Class IDs (loaded from .env)
     STANDARD_PERSON_CLASS_ID = int(os.getenv('STANDARD_PERSON_CLASS_ID', '0'))
     STANDARD_HOGGING_ITEM_CLASS_ID = [int(x.strip()) for x in os.getenv('STANDARD_HOGGING_ITEM_CLASS_ID', '24,25,26,39,41,63,64,66,67,73,76').split(',')]
     STANDARD_SEAT_CLASS_ID = [int(x.strip()) for x in os.getenv('STANDARD_SEAT_CLASS_ID', '56,57').split(',')]
-    CUSTOM_PERSON_CLASS_ID = int(os.getenv('CUSTOM_PERSON_CLASS_ID', '0'))
-    CUSTOM_HOGGING_ITEM_CLASS_ID = [int(x.strip()) for x in os.getenv('CUSTOM_HOGGING_ITEM_CLASS_ID', '1,2,3,4,5,9,10').split(',')]
-    CUSTOM_SEAT_CLASS_ID = [int(x.strip()) for x in os.getenv('CUSTOM_SEAT_CLASS_ID', '6, 7, 8').split(',')]
+    CUSTOM_PERSON_CLASS_ID = int(os.getenv('CUSTOM_PERSON_CLASS_ID', '15'))
+    CUSTOM_HOGGING_ITEM_CLASS_ID = [int(x.strip()) for x in os.getenv('CUSTOM_HOGGING_ITEM_CLASS_ID', '0,1,2,3,4,6,7,8,9,10,11,12,13,14,16,17,18').split(',')]
+    CUSTOM_SEAT_CLASS_ID = [int(x.strip()) for x in os.getenv('CUSTOM_SEAT_CLASS_ID', '5').split(',')]
     
     # Print header
     print("=" * 80)
@@ -256,6 +297,14 @@ if __name__ == "__main__":
     print("=" * 80)
     print(f"PyTorch version: {torch.__version__}")
     print(f"CUDA available: {torch.cuda.is_available()}")
+    print(f"IMAGE_SIZE: {IMAGE_SIZE}")
+    print(f"SEAT_IMAGE_SIZE: {SEAT_IMAGE_SIZE}")
+    print(f"PERSON_CONFIDENCE_THRESHOLD: {PERSON_CONFIDENCE_THRESHOLD}")
+    print(f"ITEM_CONFIDENCE_THRESHOLD: {ITEM_CONFIDENCE_THRESHOLD}")
+    print(f"SEAT_CONFIDENCE_THRESHOLD: {SEAT_CONFIDENCE_THRESHOLD}")
+    print(f"USE_PREPROCESSING: {USE_PREPROCESSING}")
+    print(f"ENABLE_TEST_UPSCALE: {ENABLE_TEST_UPSCALE}")
+    print(f"MIN_TEST_IMAGE_SIDE: {MIN_TEST_IMAGE_SIDE}")
     if torch.cuda.is_available():
         print(f"CUDA version: {torch.version.cuda}")
 
