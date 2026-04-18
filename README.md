@@ -136,11 +136,18 @@ This brings up:
 
 Optional streaming support is configured in [mediamtx.yml](./mediamtx.yml). Start it separately only if your camera or streaming workflow needs it.
 
-### Local Video Streaming
+### Video Streaming
 
-For repeatable local occupancy / CV demos, place short mp4 fixtures in
-[streaming/videos](./streaming/videos) with names like `stream1.mp4`,
-`stream2.mp4`, `stream3.mp4`, and `stream4.mp4`.
+For repeatable occupancy / CV demos, the streaming profile reads four
+cloud-hosted mp4 fixtures:
+
+- `https://fyp.tos-cn-hongkong.volces.com/stream1.mp4`
+- `https://fyp.tos-cn-hongkong.volces.com/stream2.mp4`
+- `https://fyp.tos-cn-hongkong.volces.com/stream3.mp4`
+- `https://fyp.tos-cn-hongkong.volces.com/stream4.mp4`
+
+Local copies can still be placed in [streaming/videos](./streaming/videos) for
+offline testing, but mp4 files there are ignored by Git.
 
 Start MediaMTX and four ffmpeg publishers:
 

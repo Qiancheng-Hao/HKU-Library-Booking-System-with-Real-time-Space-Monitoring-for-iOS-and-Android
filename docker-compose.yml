@@ -60,10 +60,8 @@ services:
       - streaming
     depends_on:
       - mediamtx
-    volumes:
-      - ./streaming/videos:/videos:ro
     command: >
-      -re -stream_loop -1 -i /videos/stream1.mp4
+      -re -stream_loop -1 -i https://fyp.tos-cn-hongkong.volces.com/stream1.mp4
       -an -vf scale=640:360,fps=1 -r 1
       -c:v libx264 -profile:v baseline -level 3.1
       -preset ultrafast -tune zerolatency
@@ -77,10 +75,8 @@ services:
       - streaming
     depends_on:
       - mediamtx
-    volumes:
-      - ./streaming/videos:/videos:ro
     command: >
-      -re -stream_loop -1 -i /videos/stream2.mp4
+      -re -stream_loop -1 -i https://fyp.tos-cn-hongkong.volces.com/stream2.mp4
       -an -vf scale=640:360,fps=1 -r 1
       -c:v libx264 -profile:v baseline -level 3.1
       -preset ultrafast -tune zerolatency
@@ -94,10 +90,8 @@ services:
       - streaming
     depends_on:
       - mediamtx
-    volumes:
-      - ./streaming/videos:/videos:ro
     command: >
-      -re -stream_loop -1 -i /videos/stream3.mp4
+      -re -stream_loop -1 -i https://fyp.tos-cn-hongkong.volces.com/stream3.mp4
       -an -vf scale=640:360,fps=1 -r 1
       -c:v libx264 -profile:v baseline -level 3.1
       -preset ultrafast -tune zerolatency
@@ -111,10 +105,8 @@ services:
       - streaming
     depends_on:
       - mediamtx
-    volumes:
-      - ./streaming/videos:/videos:ro
     command: >
-      -re -stream_loop -1 -i /videos/stream4.mp4
+      -re -stream_loop -1 -i https://fyp.tos-cn-hongkong.volces.com/stream4.mp4
       -an -vf scale=640:360,fps=1 -r 1
       -c:v libx264 -profile:v baseline -level 3.1
       -preset ultrafast -tune zerolatency

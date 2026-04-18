@@ -1,18 +1,27 @@
-# Local Video Streaming
+# Video Streaming
 
-This folder contains local MediaMTX streaming fixtures for the occupancy / CV
+This folder contains MediaMTX streaming setup notes for the occupancy / CV
 pipeline. The Docker Compose setup starts one MediaMTX server and one ffmpeg
-publisher per video file.
+publisher per video source.
 
 ## Video Files
 
-Put local demo videos in:
+The default streaming profile reads the four demo videos from TOS, so the
+repository does not need to store large `.mp4` fixtures:
 
 ```text
-streaming/videos/
+https://fyp.tos-cn-hongkong.volces.com/stream1.mp4
+https://fyp.tos-cn-hongkong.volces.com/stream2.mp4
+https://fyp.tos-cn-hongkong.volces.com/stream3.mp4
+https://fyp.tos-cn-hongkong.volces.com/stream4.mp4
 ```
 
-Expected filenames:
+Local copies can still be placed in `streaming/videos/` for offline testing,
+but `.mp4` files in that folder are ignored by Git. If you want Docker Compose
+to use local files, change the ffmpeg `-i` inputs in `docker-compose.yml` back
+to paths such as `/videos/stream1.mp4` and mount the folder.
+
+Optional local filenames:
 
 ```text
 stream1.mp4
@@ -20,13 +29,6 @@ stream2.mp4
 stream3.mp4
 stream4.mp4
 ```
-
-The setup uses `stream1.mp4` to `stream4.mp4`.
-
-These four fixture videos are allowed through the root `.gitignore` so the
-streaming demo works after cloning the repository. Keep them short and
-privacy-safe. Add larger or extra local videos only with Git LFS or a download
-script.
 
 ## Start Four Streams
 
@@ -60,7 +62,7 @@ http://127.0.0.1:8889/stream4
 The `stream1` service is equivalent to running MediaMTX and then pushing:
 
 ```bash
-ffmpeg -re -stream_loop -1 -i streaming/videos/stream1.mp4 \
+ffmpeg -re -stream_loop -1 -i https://fyp.tos-cn-hongkong.volces.com/stream1.mp4 \
   -an -vf "scale=640:360,fps=1" -r 1 \
   -c:v libx264 -profile:v baseline -level 3.1 \
   -preset ultrafast -tune zerolatency \
