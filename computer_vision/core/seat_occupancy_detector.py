@@ -15,7 +15,7 @@ class SeatOccupancyDetector:
     """
     def __init__(self, occupancy_model_path: str, seat_model_path: str, debug_mode: bool = False, device: str = 'auto') -> None:
         """
-        Initialize the SeatOccupancyDetector with two models.
+        Initialize the SeatOccupancyDetector with one or two models.
         Args:
             occupancy_model_path (str): Occupancy model path ('person', 'hogging_item')
             seat_model_path (str): Seat model path ('seat')
@@ -31,13 +31,20 @@ class SeatOccupancyDetector:
                 device = 'cpu'
         self.device = device
         self.debug_mode = debug_mode
+        occupancy_model_resolved = str(Path(occupancy_model_path).expanduser().resolve())
+        seat_model_resolved = str(Path(seat_model_path).expanduser().resolve())
+        self.uses_shared_model = occupancy_model_resolved == seat_model_resolved
         self.occupancy_model = YOLO(occupancy_model_path)
-        self.seat_model = YOLO(seat_model_path)
+        if self.uses_shared_model:
+            self.seat_model = self.occupancy_model
+        else:
+            self.seat_model = YOLO(seat_model_path)
 
         # Debug mode: Show model information
         if debug_mode:
             logging.info(f"--------------------")
             logging.info(f"All models loaded successfully! Running on: {self.device}")
+            logging.info(f"Shared model mode: {self.uses_shared_model}")
             logging.info(f"\n--- Occupancy Model Information ({occupancy_model_path}) ---")
             logging.info(f"  - Classes: {self.occupancy_model.names}")
             logging.info(f"\n--- Seat Model Information ({seat_model_path}) ---")
@@ -113,6 +120,51 @@ class SeatOccupancyDetector:
         blurred = cv2.GaussianBlur(enhanced, (0, 0), sigmaX=1.0, sigmaY=1.0)
         sharpened = cv2.addWeighted(enhanced, 1.12, blurred, -0.12, 0)
         return sharpened
+
+    def _run_inference_for_occupancy_and_seats(
+        self,
+        image: np.ndarray,
+        imgsz: int,
+        seat_imgsz: int
+    ):
+        """
+        Run one or two inference passes depending on whether both tasks share
+        the same checkpoint.
+        """
+        if self.uses_shared_model:
+            shared_imgsz = max(imgsz, seat_imgsz)
+            if self.debug_mode:
+                logging.info(
+                    "Running shared model once for occupancy and seats "
+                    f"(imgsz={shared_imgsz})..."
+                )
+            shared_results = self.occupancy_model(
+                image,
+                verbose=False,
+                imgsz=shared_imgsz,
+                device=self.device
+            )
+            shared_detections = shared_results[0].boxes
+            return shared_detections, shared_detections
+
+        if self.debug_mode:
+            logging.info("Running Occupancy Model...")
+        occupancy_results = self.occupancy_model(
+            image,
+            verbose=False,
+            imgsz=imgsz,
+            device=self.device
+        )
+
+        if self.debug_mode:
+            logging.info("Running Seat Model...")
+        seat_results = self.seat_model(
+            image,
+            verbose=False,
+            imgsz=seat_imgsz,
+            device=self.device
+        )
+        return occupancy_results[0].boxes, seat_results[0].boxes
     
     # Utility Functions
     @staticmethod 
@@ -591,9 +643,9 @@ class SeatOccupancyDetector:
         """
         Function 1+ (Advanced): Analyze image with seat-based spatial filtering
         
-        This method runs BOTH models in real-time:
-        - Occupancy Model: Detects persons and items
-        - Seat Model: Detects seat positions (for spatial filtering)
+        This method runs occupancy and seat detection in real-time:
+        - Shared-model mode: one inference pass, class-filtered into two views
+        - Dual-model mode: separate occupancy and seat inference passes
         
         Only items that are physically on/near seats are counted as hogging.
         
@@ -618,11 +670,11 @@ class SeatOccupancyDetector:
         if use_preprocessing:
             if self.debug_mode: logging.info("Applying image preprocessing...")
             image = self.preprocess_image(image)
-        
-        # Run Occupancy Model (persons + items)
-        if self.debug_mode: logging.info("Running Occupancy Model...")
-        occupancy_results = self.occupancy_model(image, verbose=False, imgsz=imgsz, device=self.device)
-        occupancy_detections = occupancy_results[0].boxes
+        occupancy_detections, seat_detections = self._run_inference_for_occupancy_and_seats(
+            image=image,
+            imgsz=imgsz,
+            seat_imgsz=seat_imgsz
+        )
         
         persons_boxes = []
         objects_boxes = []
@@ -641,10 +693,6 @@ class SeatOccupancyDetector:
                 if conf < item_confidence_threshold:
                     continue
                 objects_boxes.append(box)
-
-        # Run Seat Model (seats)
-        seat_results = self.seat_model(image, verbose=False, imgsz=seat_imgsz, device=self.device)
-        seat_detections = seat_results[0].boxes
 
         # Classify all detected seats
         seat_boxes = []
