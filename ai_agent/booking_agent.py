@@ -553,8 +553,16 @@ class BookingAgent:
             "sessions": None,
         }
 
+    def clear_collected_fields(self, fields: list[str]) -> list[str]:
+        """Clear selected collected fields and return the fields that changed."""
+        cleared: list[str] = []
+        for field in fields:
+            if field in self.collected_info:
+                self.collected_info[field] = None
+                cleared.append(field)
+        return cleared
+
     def get_collected_info(self) -> Dict[str, Any]:
         """Get the currently collected information."""
         return self.collected_info.copy()
-
 
