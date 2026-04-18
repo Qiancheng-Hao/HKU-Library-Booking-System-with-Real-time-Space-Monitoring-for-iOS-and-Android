@@ -27,6 +27,16 @@ streaming/videos/stream3.mp4
 streaming/videos/stream4.mp4
 ```
 
+If the hosted URLs are slow or unreachable from your network, download the
+videos first and use the local override:
+
+```bash
+curl -L https://fyp.tos-cn-hongkong.volces.com/stream1.mp4 -o streaming/videos/stream1.mp4
+curl -L https://fyp.tos-cn-hongkong.volces.com/stream2.mp4 -o streaming/videos/stream2.mp4
+curl -L https://fyp.tos-cn-hongkong.volces.com/stream3.mp4 -o streaming/videos/stream3.mp4
+curl -L https://fyp.tos-cn-hongkong.volces.com/stream4.mp4 -o streaming/videos/stream4.mp4
+```
+
 ## Start Four Streams
 
 From the repository root:

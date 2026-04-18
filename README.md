@@ -9,6 +9,10 @@ Full-stack HKU library booking platform with four major parts:
 
 The repository also includes local infrastructure and streaming configs for PostgreSQL, Redis, RabbitMQ, and MediaMTX.
 
+## App Demo
+
+- [Watch the app demo](https://connecthkuhk-my.sharepoint.com/:v:/g/personal/haoqc_connect_hku_hk/IQD5ifK7SQU0RIEikTtv5fCLAY9dnekZS3gum7PLmzom7CY?nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJPbmVEcml2ZUZvckJ1c2luZXNzIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXciLCJyZWZlcnJhbFZpZXciOiJNeUZpbGVzTGlua0NvcHkifX0&e=HuiH3s)
+
 ## What This Project Covers
 
 - User registration and login
@@ -150,6 +154,17 @@ cloud-hosted mp4 fixtures:
 Local copies can still be placed in [streaming/videos](./streaming/videos) for
 offline testing, but mp4 files there are ignored by Git.
 
+If the cloud-hosted fixtures are unavailable from your network, download them
+into `streaming/videos/` and use the local-video compose override instead.
+
+```bash
+curl -L https://fyp.tos-cn-hongkong.volces.com/stream1_download.mp4 -o streaming/videos/stream1.mp4
+curl -L https://fyp.tos-cn-hongkong.volces.com/stream2_download.mp4 -o streaming/videos/stream2.mp4
+curl -L https://fyp.tos-cn-hongkong.volces.com/stream3_download.mp4 -o streaming/videos/stream3.mp4
+curl -L https://fyp.tos-cn-hongkong.volces.com/stream4_download.mp4 -o streaming/videos/stream4.mp4
+docker compose -f docker-compose.yml -f docker-compose.local-videos.yml --profile streaming up mediamtx stream1 stream2 stream3 stream4
+```
+
 Start MediaMTX and four ffmpeg publishers:
 
 ```bash
@@ -231,6 +246,8 @@ If you are using the Docker PostgreSQL service from this repo, adjust the port t
 
 ## Frontend Setup
 
+Frontend-specific notes also live in [frontend/README.md](./frontend/README.md).
+
 From the `frontend/` directory:
 
 ```bash
@@ -301,6 +318,7 @@ cd ai_agent
 python -m venv .venv
 source .venv/bin/activate
 pip install -r ../backend/requirements.txt
+pip install openai
 cp env.example .env
 ```
 
@@ -314,16 +332,18 @@ Then configure:
 Start the AI service:
 
 ```bash
-python server.py
+python api_server.py
 ```
 
 Expected default address: `http://127.0.0.1:8001`
 
 ### Important AI Agent Caveat
 
-The AI agent uses hardcoded and semi-static library / facility mappings in `booking_system.py` and `facility_mapping.py`.
+The current backend integration talks to `ai_agent/api_server.py`, not the older FastMCP prototype in `ai_agent/server.py`.
 
-If your seeded local database IDs or room naming conventions differ from the expected defaults, the AI agent may fail to find rooms or create bookings. Check the module-specific notes in [ai_agent/README.md](./ai_agent/README.md) before debugging the conversation layer.
+The AI agent still relies on semi-static library and facility mappings in `booking_system.py` and `facility_mapping.py`.
+
+If your seeded local database data or room naming conventions differ from the expected defaults, the AI agent may fail to find matching rooms. Check the module-specific notes in [ai_agent/README.md](./ai_agent/README.md) before debugging the conversation layer.
 
 ## Computer Vision Setup
 
