@@ -217,6 +217,45 @@ def _missing_fields(collected_info: dict[str, Any]) -> list[str]:
     return missing
 
 
+def _detect_booking_change_fields(message: str) -> list[str]:
+    normalized = message.strip().lower()
+    if not normalized:
+        return []
+
+    has_change_intent = re.search(
+        r"\b(another|different|change|switch|swap|modify|update|replace|new|other)\b"
+        r"|换|改|另|其他|其它|别的|重新",
+        normalized,
+    )
+    if not has_change_intent:
+        return []
+
+    fields: list[str] = []
+
+    def add(*field_names: str) -> None:
+        for field_name in field_names:
+            if field_name not in fields:
+                fields.append(field_name)
+
+    if re.search(r"\b(location|library|place)\b|地点|图书馆|位置", normalized):
+        add("location", "type", "sessions", "rooms")
+    if re.search(r"\b(type|facility|category)\b|类型|设施|房型", normalized):
+        add("type", "rooms")
+    if re.search(r"\b(date|day)\b|日期|哪天|明天|后天|星期|礼拜", normalized):
+        add("date", "sessions", "rooms")
+    if re.search(r"\b(time|slot|session|hour|period)\b|时间|时段|小时|几点", normalized):
+        add("sessions", "rooms")
+    if re.search(r"\b(room|rooms)\b|房间|房号", normalized):
+        add("rooms")
+    if not fields and re.search(
+        r"\b(booking|reservation|request)\b|预约|預約|预订|預訂|预定|預定",
+        normalized,
+    ):
+        add("location", "type", "date", "sessions", "rooms")
+
+    return fields
+
+
 def _availability_payload(collected_info: dict[str, Any], user_id: str) -> tuple[dict[str, list[str]], dict[str, Any], list[str]]:
     suggested_options = {
         "locations": [],
@@ -380,6 +419,10 @@ def _build_missing_info_reply_localized(
             reply += "\n\n请先选择一个或多个房间，然后我再为您进入确认步骤。"
             return reply
 
+        cleaned_fallback = fallback_reply.strip()
+        if cleaned_fallback:
+            return cleaned_fallback
+
         field_labels = {
             "location": "地点",
             "room_type": "房间类型",
@@ -413,6 +456,10 @@ def _build_missing_info_reply_localized(
             reply += f"\n\nAvailable rooms: {', '.join(available_rooms)}."
         reply += "\n\nPlease choose one or more rooms before moving to confirmation."
         return reply
+
+    cleaned_fallback = fallback_reply.strip()
+    if cleaned_fallback:
+        return cleaned_fallback
 
     field_labels = {
         "location": "location",
@@ -557,6 +604,16 @@ async def chat_with_agent_endpoint(
         if session["thread"] is None:
             LOGGER.info("chat_create_thread session_id=%s", session_id)
             session["thread"] = agent.agent.create_session()
+
+        change_fields = _detect_booking_change_fields(payload.message)
+        if change_fields:
+            cleared_fields = agent.clear_collected_fields(change_fields)
+            LOGGER.info(
+                "chat_change_request_cleared_fields session_id=%s requested_fields=%s cleared_fields=%s",
+                session_id,
+                change_fields,
+                cleared_fields,
+            )
 
         reply = await agent.chat(payload.message, thread=session["thread"])
         LOGGER.info(

@@ -242,7 +242,55 @@ void main() {
     });
 
     test(
-      'cancelConfirmation clears pending preview and appends cancellation message',
+      'changeRoomSelection reopens room selection when earlier map options exist',
+      () async {
+        final repository = _FakeAiAgentRepository(
+          chatResponses: [
+            const AiChatResponse(
+              reply: 'Pick on map.',
+              readyForConfirmation: false,
+              suggestedOptions: AiSuggestedOptions(rooms: ['A1', 'A2']),
+              collectedInfo: AiCollectedInfo(
+                roomTypeCode: '21',
+                roomType: 'Discussion Room',
+              ),
+            ),
+            const AiChatResponse(
+              reply: 'Ready.',
+              readyForConfirmation: true,
+              bookingPreview: AiBookingPreview(
+                library: 'Main Library',
+                date: '2026-04-16',
+                candidateRooms: ['A1'],
+              ),
+            ),
+          ],
+        );
+        final provider = AiSessionProvider(aiAgentRepository: repository);
+
+        await provider.initSession();
+        await provider.sendMessage('show rooms');
+        await provider.sendMessage('ready');
+        provider.changeRoomSelection();
+
+        expect(provider.awaitingConfirmation, isFalse);
+        expect(provider.pendingConfirmation, isNull);
+        expect(
+          provider.messages.last.text,
+          'Booking cancelled. Please choose another room from the map.',
+        );
+        expect(provider.messages.last.data?.readyForConfirmation, isFalse);
+        expect(provider.messages.last.data?.suggestedOptions?.rooms, [
+          'A1',
+          'A2',
+        ]);
+        final reopenedMessage = provider.messages.last.data as AiChatResponse?;
+        expect(reopenedMessage?.collectedInfo?.roomTypeCode, '21');
+      },
+    );
+
+    test(
+      'cancelConfirmation clears preview and appends cancellation message',
       () async {
         final repository = _FakeAiAgentRepository(
           chatResponses: [
@@ -269,6 +317,50 @@ void main() {
           provider.messages.last.text,
           'Booking cancelled. How else can I help?',
         );
+      },
+    );
+
+    test('changeTimeSelection prompts for a new time slot', () async {
+      final repository = _FakeAiAgentRepository();
+      final provider = AiSessionProvider(aiAgentRepository: repository);
+
+      await provider.initSession();
+      provider.awaitingConfirmation = true;
+      provider.pendingConfirmation = const AiBookingPreview(
+        library: 'Main Library',
+        date: '2026-04-16',
+        candidateRooms: ['A1'],
+      );
+
+      provider.changeTimeSelection();
+
+      expect(provider.awaitingConfirmation, isFalse);
+      expect(provider.pendingConfirmation, isNull);
+      expect(
+        provider.messages.last.text,
+        'Booking paused. Send me your new time slot, for example 14:00-16:00.',
+      );
+    });
+
+    test(
+      'changeTimeSelection rewrites the next user message for the AI',
+      () async {
+        final repository = _FakeAiAgentRepository(
+          chatResponses: [
+            const AiChatResponse(
+              reply: 'I found new rooms for that time.',
+              readyForConfirmation: false,
+            ),
+          ],
+        );
+        final provider = AiSessionProvider(aiAgentRepository: repository);
+
+        await provider.initSession();
+        provider.changeTimeSelection();
+        await provider.sendMessage('14:00-16:00');
+
+        expect(repository.lastChatMessage, 'change time to 14:00-16:00');
+        expect(provider.messages.last.text, 'I found new rooms for that time.');
       },
     );
 

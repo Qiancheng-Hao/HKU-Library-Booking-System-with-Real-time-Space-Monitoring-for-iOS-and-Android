@@ -4,12 +4,16 @@ import '../../../../theme/app_theme.dart';
 
 class ConfirmationCard extends StatelessWidget {
   final AiBookingPreview preview;
+  final VoidCallback onChangeRoom;
+  final VoidCallback onChangeTime;
   final VoidCallback onCancel;
   final void Function(List<String>) onConfirm;
 
   const ConfirmationCard({
     super.key,
     required this.preview,
+    required this.onChangeRoom,
+    required this.onChangeTime,
     required this.onCancel,
     required this.onConfirm,
   });
@@ -111,15 +115,61 @@ class ConfirmationCard extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton(
+                  onPressed: onChangeRoom,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Change Room'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onChangeTime,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Change Time'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
                   onPressed: onCancel,
-                  child: const Text('Cancel'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Cancel'),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: ElevatedButton(
                   onPressed: () => onConfirm(candidateRooms),
-                  child: const Text('Confirm'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Confirm'),
+                  ),
                 ),
               ),
             ],

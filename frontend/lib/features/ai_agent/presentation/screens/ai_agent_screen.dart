@@ -192,6 +192,8 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                   provider.pendingConfirmation != null)
                 ConfirmationCard(
                   preview: provider.pendingConfirmation!,
+                  onChangeRoom: provider.changeRoomSelection,
+                  onChangeTime: provider.changeTimeSelection,
                   onCancel: provider.cancelConfirmation,
                   onConfirm: provider.confirmBooking,
                 ),

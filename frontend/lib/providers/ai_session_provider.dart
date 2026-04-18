@@ -5,6 +5,8 @@ import '../features/ai_agent/data/ai_agent_repository.dart';
 
 enum _MessageType { user, ai, result, divider }
 
+enum _PendingBookingChange { room, time }
+
 class ChatMessage {
   final String text;
   final _MessageType _type;
@@ -44,6 +46,8 @@ class AiSessionProvider extends ChangeNotifier {
   bool awaitingConfirmation = false;
   AiBookingPreview? pendingConfirmation;
   String? _composerStatusMessage;
+  AiChatResponse? _latestRoomSuggestion;
+  _PendingBookingChange? _pendingBookingChange;
 
   final Set<ChatMessage> _consumedMapSuggestions = {};
   final Set<ChatMessage> _expiredMapSuggestions = {};
@@ -71,6 +75,8 @@ class AiSessionProvider extends ChangeNotifier {
       messages.clear();
       _consumedMapSuggestions.clear();
       _expiredMapSuggestions.clear();
+      _latestRoomSuggestion = null;
+      _pendingBookingChange = null;
       messages.add(ChatMessage.ai(_welcomeText));
     } catch (_) {
       sessionError = true;
@@ -95,9 +101,10 @@ class AiSessionProvider extends ChangeNotifier {
     _setLoading(true);
 
     try {
+      final pendingBookingChange = _pendingBookingChange;
       final response = await _aiAgentRepository.chat(
         aiSessionId: _sessionId!,
-        message: trimmed,
+        message: _rewriteOutgoingMessage(trimmed, pendingBookingChange),
       );
 
       final preview = response.bookingPreview;
@@ -105,8 +112,14 @@ class AiSessionProvider extends ChangeNotifier {
       if (_isRecoveredSessionResponse(response)) {
         awaitingConfirmation = false;
         pendingConfirmation = null;
+        _latestRoomSuggestion = null;
+        _pendingBookingChange = null;
         messages.add(ChatMessage.divider('Conversation Reconnected'));
       }
+      if (response.suggestedOptions?.rooms.isNotEmpty ?? false) {
+        _latestRoomSuggestion = response;
+      }
+      _pendingBookingChange = null;
       messages.add(ChatMessage.ai(response.reply, data: response));
       if (response.readyForConfirmation && preview != null) {
         awaitingConfirmation = true;
@@ -135,6 +148,8 @@ class AiSessionProvider extends ChangeNotifier {
       messages.add(ChatMessage.result(result.summary, data: result));
       if (result.success) {
         final completedSessionId = _sessionId!;
+        _latestRoomSuggestion = null;
+        _pendingBookingChange = null;
         try {
           await _aiAgentRepository.resetSession(completedSessionId);
         } catch (_) {}
@@ -181,14 +196,56 @@ class AiSessionProvider extends ChangeNotifier {
     pendingConfirmation = null;
     sessionError = false;
     _composerStatusMessage = null;
+    _latestRoomSuggestion = null;
+    _pendingBookingChange = null;
     notifyListeners();
     await initSession();
   }
 
+  void changeRoomSelection() {
+    _pendingBookingChange = _PendingBookingChange.room;
+    awaitingConfirmation = false;
+    pendingConfirmation = null;
+    final latestSuggestion = _latestRoomSuggestion;
+    if (latestSuggestion != null &&
+        (latestSuggestion.suggestedOptions?.rooms.isNotEmpty ?? false)) {
+      messages.add(
+        ChatMessage.ai(
+          'Booking cancelled. Please choose another room from the map.',
+          data: AiChatResponse(
+            reply:
+                'Booking cancelled. Please choose another room from the map.',
+            readyForConfirmation: false,
+            bookingPreview: latestSuggestion.bookingPreview,
+            suggestedOptions: latestSuggestion.suggestedOptions,
+            collectedInfo: latestSuggestion.collectedInfo,
+            warnings: latestSuggestion.warnings,
+          ),
+        ),
+      );
+    } else {
+      messages.add(ChatMessage.ai('Booking cancelled. How else can I help?'));
+    }
+    notifyListeners();
+  }
+
   void cancelConfirmation() {
+    _pendingBookingChange = null;
     awaitingConfirmation = false;
     pendingConfirmation = null;
     messages.add(ChatMessage.ai('Booking cancelled. How else can I help?'));
+    notifyListeners();
+  }
+
+  void changeTimeSelection() {
+    _pendingBookingChange = _PendingBookingChange.time;
+    awaitingConfirmation = false;
+    pendingConfirmation = null;
+    messages.add(
+      ChatMessage.ai(
+        'Booking paused. Send me your new time slot, for example 14:00-16:00.',
+      ),
+    );
     notifyListeners();
   }
 
@@ -214,6 +271,20 @@ class AiSessionProvider extends ChangeNotifier {
           value.contains('restarted') &&
           value.contains('no longer available');
     });
+  }
+
+  String _rewriteOutgoingMessage(
+    String message,
+    _PendingBookingChange? pendingBookingChange,
+  ) {
+    switch (pendingBookingChange) {
+      case _PendingBookingChange.room:
+        return 'change room to $message';
+      case _PendingBookingChange.time:
+        return 'change time to $message';
+      case null:
+        return message;
+    }
   }
 
   void _setLoading(bool value) {
