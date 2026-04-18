@@ -39,7 +39,7 @@ class AuthProvider with ChangeNotifier {
       if (await _authRepository.hasStoredSession()) {
         _isLoggedIn = true;
         await _fetchUserProfile();
-        await _syncUpcomingReminders();
+        await _syncUpcomingRemindersQuietly();
       } else {
         _isLoggedIn = false;
       }
@@ -58,7 +58,7 @@ class AuthProvider with ChangeNotifier {
     await _authRepository.login(email, password);
     _isLoggedIn = true;
     await _fetchUserProfile();
-    await _syncUpcomingReminders();
+    await _syncUpcomingRemindersQuietly();
     notifyListeners();
   }
 
@@ -80,5 +80,13 @@ class AuthProvider with ChangeNotifier {
     _userName = null;
     _userEmail = null;
     notifyListeners();
+  }
+
+  Future<void> _syncUpcomingRemindersQuietly() async {
+    try {
+      await _syncUpcomingReminders();
+    } catch (e) {
+      debugPrint('Error syncing booking reminders: $e');
+    }
   }
 }
