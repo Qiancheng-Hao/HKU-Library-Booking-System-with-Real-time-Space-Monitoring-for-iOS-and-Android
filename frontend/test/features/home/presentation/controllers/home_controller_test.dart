@@ -5,6 +5,8 @@ import 'package:frontend/features/home/data/occupancy_repository.dart';
 import 'package:frontend/features/home/presentation/controllers/home_controller.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('HomeController', () {
     test('refresh loads occupancy and recommendation', () async {
       final repository = _FakeOccupancyRepository();
@@ -20,6 +22,8 @@ void main() {
       );
       expect(controller.recommendation?.libraryName, 'Main Library');
       expect(repository.lastStrategy, 'occupancyRate');
+      expect(repository.lastOccupancyAt, isNotNull);
+      expect(repository.lastRecommendationAt, isNotNull);
     });
 
     test('refresh captures errors and keeps previous data', () async {
@@ -68,6 +72,18 @@ void main() {
         'Main Library',
       );
       expect(repository.lastStrategy, 'distance');
+      expect(repository.lastOccupancyAt, isNotNull);
+      expect(repository.lastRecommendationAt, isNotNull);
+    });
+
+    test('initialize keeps cached startup requests cache-friendly', () async {
+      final repository = _FakeOccupancyRepository();
+      final controller = HomeController(occupancyRepository: repository);
+
+      await controller.initialize();
+
+      expect(repository.occupancyRequestTimes.first, isNull);
+      expect(repository.recommendationRequestTimes.first, isNull);
     });
   });
 }
@@ -93,14 +109,21 @@ class _FakeOccupancyRepository extends OccupancyRepository {
   );
   Object? error;
   String? lastStrategy;
+  DateTime? lastOccupancyAt;
+  DateTime? lastRecommendationAt;
+  final List<DateTime?> occupancyRequestTimes = [];
+  final List<DateTime?> recommendationRequestTimes = [];
 
   @override
   Future<OccupancySnapshot> getRealtimeOccupancy({
     double? latitude,
     double? longitude,
+    DateTime? at,
   }) async {
     final currentError = error;
     if (currentError != null) throw currentError;
+    lastOccupancyAt = at;
+    occupancyRequestTimes.add(at);
     return occupancy;
   }
 
@@ -109,10 +132,13 @@ class _FakeOccupancyRepository extends OccupancyRepository {
     double? latitude,
     double? longitude,
     String strategy = 'distance',
+    DateTime? at,
   }) async {
     final currentError = error;
     if (currentError != null) throw currentError;
     lastStrategy = strategy;
+    lastRecommendationAt = at;
+    recommendationRequestTimes.add(at);
     return recommendation;
   }
 }

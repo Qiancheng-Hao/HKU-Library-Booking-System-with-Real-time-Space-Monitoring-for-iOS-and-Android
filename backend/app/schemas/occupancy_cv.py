@@ -66,6 +66,7 @@ class OccupancyRecommendationRequest(BaseModel):
     longitude: float
     strategy: Literal["distance", "occupancyRate"]
     userId: str | None = None
+    time: datetime | None = None
 
 
 class OccupancyRecommendationResponse(BaseModel):

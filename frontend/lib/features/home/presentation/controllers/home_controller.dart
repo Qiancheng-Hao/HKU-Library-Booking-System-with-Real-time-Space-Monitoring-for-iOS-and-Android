@@ -26,33 +26,34 @@ class HomeController extends BaseAsyncController {
   String? get recommendationErrorMessage => _recommendationErrorMessage;
 
   Future<void> initialize() async {
-    await refresh();
+    await refresh(bypassCache: false);
     await _getCurrentLocation();
     if (_currentPosition != null) {
-      await refresh();
+      await refresh(bypassCache: false);
     }
   }
 
-  Future<LibraryOccupancy> _fetchRecommendation() {
+  Future<LibraryOccupancy> _fetchRecommendation({DateTime? at}) {
     return _occupancyRepository.getRecommendation(
       latitude: _currentPosition?.latitude,
       longitude: _currentPosition?.longitude,
       strategy: _recommendationStrategy,
+      at: at,
     );
   }
 
   Future<void> _getCurrentLocation() async {
-    if (!await Geolocator.isLocationServiceEnabled()) return;
-
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
-    }
-
-    if (permission == LocationPermission.deniedForever) return;
-
     try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+
+      if (permission == LocationPermission.deniedForever) return;
+
       _currentPosition = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -63,14 +64,16 @@ class HomeController extends BaseAsyncController {
     }
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool bypassCache = true}) async {
     await runGuarded(() async {
+      final requestTime = bypassCache ? DateTime.now() : null;
       final results = await Future.wait<Object>([
         _occupancyRepository.getRealtimeOccupancy(
           latitude: _currentPosition?.latitude,
           longitude: _currentPosition?.longitude,
+          at: requestTime,
         ),
-        _fetchRecommendation(),
+        _fetchRecommendation(at: requestTime),
       ]);
       _occupancy = results[0] as OccupancySnapshot;
       _recommendation = results[1] as LibraryOccupancy;
@@ -88,12 +91,13 @@ class HomeController extends BaseAsyncController {
   Future<void> _refreshRecommendation() async {
     final requestId = ++_recommendationRequestId;
     bool isLatestRequest() => requestId == _recommendationRequestId;
+    final requestTime = DateTime.now();
 
     _isRecommendationLoading = true;
     _recommendationErrorMessage = null;
     notifyListeners();
     try {
-      final recommendation = await _fetchRecommendation();
+      final recommendation = await _fetchRecommendation(at: requestTime);
       if (!isLatestRequest()) return;
       _recommendation = recommendation;
     } catch (e) {

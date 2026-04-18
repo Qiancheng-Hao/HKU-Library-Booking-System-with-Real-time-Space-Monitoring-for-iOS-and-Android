@@ -398,10 +398,14 @@ def get_occupancy_recommendation(
     req: OccupancyRecommendationRequest = Body(...),
     db: Session = Depends(get_db),
 ) -> OccupancyRecommendationResponse:
-    at = datetime.now(timezone.utc)
+    at = req.time or datetime.now(timezone.utc)
 
     libraries = db.execute(select(Library).order_by(Library.name.asc())).scalars().all()
-    snapshots = _load_latest_snapshots(db, target_time=at, prefer_cache=True)
+    snapshots = _load_latest_snapshots(
+        db,
+        target_time=at,
+        prefer_cache=req.time is None,
+    )
 
     if req.strategy == "distance":
         selected_library = _select_closest_open_library(

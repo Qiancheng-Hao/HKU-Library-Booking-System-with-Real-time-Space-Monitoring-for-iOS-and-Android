@@ -29,6 +29,27 @@ void main() {
       });
     });
 
+    test('getRealtimeOccupancy includes time when bypassing cache', () async {
+      final client = FakeApiClient()
+        ..postResponses['/api/v1/occupancy/occupancy'] = {'libraries': []};
+      final repository = OccupancyRepository(client);
+      final at = DateTime.utc(2026, 4, 18, 12, 34, 56);
+
+      await repository.getRealtimeOccupancy(
+        latitude: 22.1,
+        longitude: 114.2,
+        at: at,
+      );
+
+      expect(client.lastCall.body, {
+        'latitude': 22.1,
+        'longitude': 114.2,
+        'radius': 50000000,
+        'maxResults': 20,
+        'time': '2026-04-18T12:34:56.000Z',
+      });
+    });
+
     test(
       'getRecommendation posts strategy and parses recommendation',
       () async {
@@ -82,5 +103,29 @@ void main() {
         expect(recommendation.clampedOccupancyRate, isNull);
       },
     );
+
+    test('getRecommendation includes time when bypassing cache', () async {
+      final client = FakeApiClient()
+        ..postResponses['/api/v1/occupancy/recommendation'] = {
+          'libraryName': 'Main Library',
+          'distanceFromUser': 100,
+        };
+      final repository = OccupancyRepository(client);
+      final at = DateTime.utc(2026, 4, 18, 12, 34, 56);
+
+      await repository.getRecommendation(
+        latitude: 22.1,
+        longitude: 114.2,
+        strategy: 'distance',
+        at: at,
+      );
+
+      expect(client.lastCall.body, {
+        'latitude': 22.1,
+        'longitude': 114.2,
+        'strategy': 'distance',
+        'time': '2026-04-18T12:34:56.000Z',
+      });
+    });
   });
 }
