@@ -1,0 +1,48 @@
+services:
+  stream1:
+    volumes:
+      - ./streaming/videos:/videos:ro
+    command: >
+      -re -stream_loop -1
+      -i /videos/stream1.mp4
+      -an -vf fps=1,scale=1280:720 -r 1
+      -c:v libx264 -profile:v baseline -level 4.0
+      -preset ultrafast -tune zerolatency
+      -b:v 1500k -bufsize 3000k -g 10
+      -f flv rtmp://mediamtx:1935/stream1
+
+  stream2:
+    volumes:
+      - ./streaming/videos:/videos:ro
+    command: >
+      -re -stream_loop -1
+      -i /videos/stream2.mp4
+      -an -vf fps=1,scale=1280:720 -r 1
+      -c:v libx264 -profile:v baseline -level 4.0
+      -preset ultrafast -tune zerolatency
+      -b:v 1500k -bufsize 3000k -g 10
+      -f flv rtmp://mediamtx:1935/stream2
+
+  stream3:
+    volumes:
+      - ./streaming/videos:/videos:ro
+    command: >
+      -re -stream_loop -1
+      -i /videos/stream3.mp4
+      -an -vf fps=1,scale=1280:720 -r 1
+      -c:v libx264 -profile:v baseline -level 4.0
+      -preset ultrafast -tune zerolatency
+      -b:v 1500k -bufsize 3000k -g 10
+      -f flv rtmp://mediamtx:1935/stream3
+
+  stream4:
+    volumes:
+      - ./streaming/videos:/videos:ro
+    command: >
+      -re -stream_loop -1
+      -i /videos/stream4.mp4
+      -an -vf fps=1,scale=1280:720 -r 1
+      -c:v libx264 -profile:v baseline -level 4.0
+      -preset ultrafast -tune zerolatency
+      -b:v 1500k -bufsize 3000k -g 10
+      -f flv rtmp://mediamtx:1935/stream4

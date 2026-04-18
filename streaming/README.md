@@ -16,18 +16,15 @@ https://fyp.tos-cn-hongkong.volces.com/stream3.mp4
 https://fyp.tos-cn-hongkong.volces.com/stream4.mp4
 ```
 
-Local copies can still be placed in `streaming/videos/` for offline testing,
-but `.mp4` files in that folder are ignored by Git. If you want Docker Compose
-to use local files, change the ffmpeg `-i` inputs in `docker-compose.yml` back
-to paths such as `/videos/stream1.mp4` and mount the folder.
-
-Optional local filenames:
+For local-only testing, place matching files in `streaming/videos/` and run
+Compose with `docker-compose.local-videos.yml`. The `.mp4` files are ignored by
+Git.
 
 ```text
-stream1.mp4
-stream2.mp4
-stream3.mp4
-stream4.mp4
+streaming/videos/stream1.mp4
+streaming/videos/stream2.mp4
+streaming/videos/stream3.mp4
+streaming/videos/stream4.mp4
 ```
 
 ## Start Four Streams
@@ -36,6 +33,12 @@ From the repository root:
 
 ```bash
 docker compose --profile streaming up mediamtx stream1 stream2 stream3 stream4
+```
+
+To use local video files instead of the TOS URLs:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local-videos.yml --profile streaming up mediamtx stream1 stream2 stream3 stream4
 ```
 
 Stream URLs:
