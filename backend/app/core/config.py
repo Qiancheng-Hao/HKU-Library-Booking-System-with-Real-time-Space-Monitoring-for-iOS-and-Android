@@ -128,6 +128,49 @@ class Settings(BaseSettings):
     occupancy_rollup_enabled: bool = Field(
         default=True, alias="OCCUPANCY_ROLLUP_ENABLED"
     )
+    occupancy_reports_aggregates_enabled: bool = Field(
+        default=True, alias="OCCUPANCY_REPORTS_AGGREGATES_ENABLED"
+    )
+    occupancy_reports_30m_view_name: str = Field(
+        default="occupancy_reports_30m",
+        alias="OCCUPANCY_REPORTS_30M_VIEW_NAME",
+    )
+    occupancy_reports_30m_bucket_interval: str = Field(
+        default="30 minutes",
+        alias="OCCUPANCY_REPORTS_30M_BUCKET_INTERVAL",
+    )
+    occupancy_reports_30m_start_offset: str = Field(
+        default="30 days",
+        alias="OCCUPANCY_REPORTS_30M_START_OFFSET",
+    )
+    occupancy_reports_30m_end_offset: str = Field(
+        default="30 minutes",
+        alias="OCCUPANCY_REPORTS_30M_END_OFFSET",
+    )
+    occupancy_reports_30m_schedule_interval: str = Field(
+        default="15 minutes",
+        alias="OCCUPANCY_REPORTS_30M_SCHEDULE_INTERVAL",
+    )
+    occupancy_reports_1h_view_name: str = Field(
+        default="occupancy_reports_1h",
+        alias="OCCUPANCY_REPORTS_1H_VIEW_NAME",
+    )
+    occupancy_reports_1h_bucket_interval: str = Field(
+        default="1 hour",
+        alias="OCCUPANCY_REPORTS_1H_BUCKET_INTERVAL",
+    )
+    occupancy_reports_1h_start_offset: str = Field(
+        default="180 days",
+        alias="OCCUPANCY_REPORTS_1H_START_OFFSET",
+    )
+    occupancy_reports_1h_end_offset: str = Field(
+        default="1 hour",
+        alias="OCCUPANCY_REPORTS_1H_END_OFFSET",
+    )
+    occupancy_reports_1h_schedule_interval: str = Field(
+        default="1 hour",
+        alias="OCCUPANCY_REPORTS_1H_SCHEDULE_INTERVAL",
+    )
     
     # Authentication settings
     secret_key: str = Field(

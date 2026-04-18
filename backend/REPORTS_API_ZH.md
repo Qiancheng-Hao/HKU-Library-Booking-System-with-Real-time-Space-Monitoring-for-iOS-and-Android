@@ -9,6 +9,8 @@
 - 数据来源：`occupancy_area_snapshots`
 - 占用率单位：接口返回的占用率均为 `0-100` 的百分比，而不是 `0-1`
 - 时区：报表窗口、趋势 bucket、星期/小时分组和展示标签均使用 `DEFAULT_TIMEZONE`（默认：`Asia/Hong_Kong`）
+- 优化方式：历史报表在可用时会优先使用 TimescaleDB continuous aggregate，其中 `30m` 用于趋势图，`1h` 用于 summary / heatmap / peak-hours
+- 回退策略：如果 aggregate view 不存在、尚未准备好，接口会自动回退到原始 `occupancy_area_snapshots` 查询
 
 该接口主要用于前端展示以下内容：
 
@@ -24,6 +26,25 @@
 - 支持按 `location` 和 `area` 过滤
 - 如果传入了 `area`，则必须同时传入 `location`
 - `days` 表示向前回看的统计天数
+- 历史报表相较实时占用接口可能存在轻微延迟，因为 aggregate view 会按照刷新策略定期更新
+
+## Aggregate 配置项
+
+历史报表相关的 continuous aggregate 可以通过 `.env` 调整：
+
+| 配置项 | 说明 |
+| --- | --- |
+| `OCCUPANCY_REPORTS_AGGREGATES_ENABLED` | 是否启用报表 aggregate view |
+| `OCCUPANCY_REPORTS_30M_VIEW_NAME` | 趋势图使用的物化视图名称 |
+| `OCCUPANCY_REPORTS_30M_BUCKET_INTERVAL` | 趋势聚合视图的时间粒度 |
+| `OCCUPANCY_REPORTS_30M_START_OFFSET` | 趋势聚合视图刷新策略的起始回看范围 |
+| `OCCUPANCY_REPORTS_30M_END_OFFSET` | 趋势聚合视图刷新策略的结束偏移 |
+| `OCCUPANCY_REPORTS_30M_SCHEDULE_INTERVAL` | 趋势聚合视图的刷新频率 |
+| `OCCUPANCY_REPORTS_1H_VIEW_NAME` | summary / heatmap / peak-hours 使用的物化视图名称 |
+| `OCCUPANCY_REPORTS_1H_BUCKET_INTERVAL` | 小时级聚合视图的时间粒度 |
+| `OCCUPANCY_REPORTS_1H_START_OFFSET` | 小时级聚合视图刷新策略的起始回看范围 |
+| `OCCUPANCY_REPORTS_1H_END_OFFSET` | 小时级聚合视图刷新策略的结束偏移 |
+| `OCCUPANCY_REPORTS_1H_SCHEDULE_INTERVAL` | 小时级聚合视图的刷新频率 |
 
 ## 通用查询参数
 

@@ -211,9 +211,9 @@ def estimate_occupancy_from_frame(
         seat_imgsz=settings.cv_seat_imgsz,
         location=location,
         area=area,
-        hogging_item_class_id=[1,2,3,4,5,9,10],
-        person_class_id=0,
-        seat_class_id=[6,7,8]
+        hogging_item_class_id=[0,1,2,3,4,6,7,8,9,10,11,12,13,14,16,17,18],
+        person_class_id=15,
+        seat_class_id=[5]
     )
     logger.info("cv response location=%s area=%s stats=%s", location, area, result)
     return result

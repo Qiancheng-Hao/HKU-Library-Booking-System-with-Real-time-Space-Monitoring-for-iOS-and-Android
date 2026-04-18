@@ -9,6 +9,8 @@ This document describes the backend API for the historical crowd data analysis f
 - Data source: `occupancy_area_snapshots`
 - Occupancy rate unit: all returned occupancy rate values are percentages in the range `0-100`
 - Timezone: report windows, trend buckets, weekday/hour grouping, and display labels use `DEFAULT_TIMEZONE` (default: `Asia/Hong_Kong`)
+- Optimization: reports prefer TimescaleDB continuous aggregates (`30m` for trend, `1h` for summary/heatmap/peak-hours) when available
+- Fallback: if the aggregate views are unavailable or not ready, the API falls back to raw `occupancy_area_snapshots`
 
 This API is designed for frontend visualization of:
 
@@ -24,6 +26,25 @@ This API is designed for frontend visualization of:
 - Filtering supports `location` and `area`
 - If `area` is provided, `location` must also be provided
 - `days` means the lookback window in days
+- Historical reports may lag slightly behind real-time occupancy because aggregate views refresh on a schedule
+
+## Aggregate Configuration
+
+Historical reports can be tuned through `.env`:
+
+| Name | Description |
+| --- | --- |
+| `OCCUPANCY_REPORTS_AGGREGATES_ENABLED` | Enable or disable report aggregate views |
+| `OCCUPANCY_REPORTS_30M_VIEW_NAME` | Materialized view name for trend queries |
+| `OCCUPANCY_REPORTS_30M_BUCKET_INTERVAL` | Time bucket for the trend aggregate |
+| `OCCUPANCY_REPORTS_30M_START_OFFSET` | Refresh policy start offset for the trend aggregate |
+| `OCCUPANCY_REPORTS_30M_END_OFFSET` | Refresh policy end offset for the trend aggregate |
+| `OCCUPANCY_REPORTS_30M_SCHEDULE_INTERVAL` | Refresh schedule for the trend aggregate |
+| `OCCUPANCY_REPORTS_1H_VIEW_NAME` | Materialized view name for summary / heatmap / peak-hours |
+| `OCCUPANCY_REPORTS_1H_BUCKET_INTERVAL` | Time bucket for the hourly aggregate |
+| `OCCUPANCY_REPORTS_1H_START_OFFSET` | Refresh policy start offset for the hourly aggregate |
+| `OCCUPANCY_REPORTS_1H_END_OFFSET` | Refresh policy end offset for the hourly aggregate |
+| `OCCUPANCY_REPORTS_1H_SCHEDULE_INTERVAL` | Refresh schedule for the hourly aggregate |
 
 ## Common Query Parameters
 

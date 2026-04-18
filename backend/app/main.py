@@ -62,6 +62,15 @@ def _configure_logging() -> None:
         logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
         logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
+    for logger_name in (
+        "pika",
+        "pika.adapters",
+        "pika.channel",
+        "pika.connection",
+        "pika.callback",
+    ):
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
+
 
 _configure_logging()
 Base.metadata.create_all(bind=engine)
