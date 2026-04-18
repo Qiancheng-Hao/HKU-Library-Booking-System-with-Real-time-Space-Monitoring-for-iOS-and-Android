@@ -13,8 +13,10 @@ class LibraryDetailsController extends BaseAsyncController {
 
   Library? get library => _library;
 
-  Future<void> load(int libraryId) async {
-    if (_loadedLibraryId == libraryId && _library != null) return;
+  Future<void> load(int libraryId, {bool forceRefresh = false}) async {
+    if (!forceRefresh && _loadedLibraryId == libraryId && _library != null) {
+      return;
+    }
     await runGuarded(() async {
       _library = await _libraryRepository.getLibraryDetails(libraryId);
       _loadedLibraryId = libraryId;

@@ -20,6 +20,20 @@ void main() {
       expect(controller.hasError, isFalse);
     });
 
+    test('load can force refresh for the same library id', () async {
+      final repository = _FakeLibraryRepository();
+      final controller = LibraryDetailsController(
+        libraryRepository: repository,
+      );
+
+      await controller.load(1);
+      await controller.load(1, forceRefresh: true);
+
+      expect(controller.library?.id, 1);
+      expect(repository.loadCount, 2);
+      expect(controller.hasError, isFalse);
+    });
+
     test('retry forces a new load after failure', () async {
       final repository = _FakeLibraryRepository();
       final controller = LibraryDetailsController(

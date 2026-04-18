@@ -39,7 +39,7 @@ class _LibraryListItemState extends State<LibraryListItem> {
     setState(() {
       _isExpanded = !_isExpanded;
       if (_isExpanded) {
-        _detailsController.load(widget.library.id);
+        _detailsController.load(widget.library.id, forceRefresh: true);
       }
     });
   }
