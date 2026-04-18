@@ -13,16 +13,16 @@ class SeatOccupancyDetector:
     """
     Seat Occupancy Detector, main class handlingg occupancy detection. 
     """
-    def __init__(self, occupancy_model_path: str, seat_model_path: str, debug_mode: bool = False, device: str = 'auto') -> None:
+    def __init__(self, occupancy_model_path: str, seat_model_path: str, debug_mode: bool = False, device: str = 'cuda') -> None:
         """
         Initialize the SeatOccupancyDetector with one or two models.
         Args:
             occupancy_model_path (str): Occupancy model path ('person', 'hogging_item')
             seat_model_path (str): Seat model path ('seat')
             debug_mode (bool): Whether to enable debug mode
-            device (str): Device to run on ('auto', 'cpu', 'cuda', '0', etc.)
+            device (str): Device to run on ('cuda', 'cpu', 'mps', 'auto', '0', etc.)
         """
-        if device == 'auto':
+        if device in ('auto', 'cuda', '', None):
             if torch.cuda.is_available():
                 device = 'cuda'
             elif torch.backends.mps.is_available():
@@ -641,7 +641,7 @@ class SeatOccupancyDetector:
         area: str = ""
     ) -> Dict:
         """
-        Function 1+ (Advanced): Analyze image with seat-based spatial filtering
+         Analyze image with seat-based spatial filtering
         
         This method runs occupancy and seat detection in real-time:
         - Shared-model mode: one inference pass, class-filtered into two views

@@ -130,7 +130,7 @@ def test_images_dual_model(
             seat_confidence_threshold=SEAT_CONFIDENCE_THRESHOLD,
             seat_expansion_factor=SEAT_EXPANSION_FACTOR, 
             use_preprocessing=USE_PREPROCESSING,
-            visualize=True,
+            visualize=VISUALIZE_RESULTS,
             output_path=output_path,
             imgsz=IMAGE_SIZE,
             seat_imgsz=SEAT_IMAGE_SIZE,
@@ -221,7 +221,7 @@ def test_videos_dual_model(
                 seat_confidence_threshold=SEAT_CONFIDENCE_THRESHOLD,
                 seat_expansion_factor=SEAT_EXPANSION_FACTOR,
                 use_preprocessing=USE_PREPROCESSING,
-                visualize=True,
+                visualize=VISUALIZE_RESULTS,
                 output_path="", 
                 imgsz=IMAGE_SIZE,
                 seat_imgsz=SEAT_IMAGE_SIZE,
@@ -229,9 +229,12 @@ def test_videos_dual_model(
                 area="3/F Old Wing"
             )
             
-            # Write the annotated frame directly to video (from memory)
+            # Write the annotated frame directly to video when visualization is enabled.
+            # Otherwise keep the original frame so timing stays close to inference-only mode.
             if 'visualized_image' in result:
                 out.write(result['visualized_image'])
+            else:
+                out.write(frame)
             
             # Progress update
             if frame_count % 30 == 0 or frame_count == total_frames:
@@ -272,10 +275,11 @@ if __name__ == "__main__":
     ITEM_CONFIDENCE_THRESHOLD = float(os.getenv('ITEM_CONFIDENCE_THRESHOLD', str(CONFIDENCE_THRESHOLD)))
     SEAT_CONFIDENCE_THRESHOLD = float(os.getenv('SEAT_CONFIDENCE_THRESHOLD', str(CONFIDENCE_THRESHOLD)))
     USE_PREPROCESSING = os.getenv('USE_PREPROCESSING', 'False').lower() == 'true'
+    VISUALIZE_RESULTS = os.getenv('VISUALIZE_RESULTS', 'False').lower() == 'true'
     ENABLE_TEST_UPSCALE = os.getenv('ENABLE_TEST_UPSCALE', 'True').lower() == 'true'
     MIN_TEST_IMAGE_SIDE = int(os.getenv('MIN_TEST_IMAGE_SIDE', '900'))
     DEBUG_MODE = os.getenv('DEBUG_MODE', 'False').lower() == 'true'
-    DEVICE = os.getenv('DEVICE', 'auto')
+    DEVICE = os.getenv('DEVICE', 'cuda')
     
     # Model paths (loaded from .env)
     standard_occupancy_model = os.path.join(computer_vision_dir, os.getenv('STANDARD_OCCUPANCY_MODEL_PATH', 'train_models/yolo11l.pt'))
@@ -303,6 +307,7 @@ if __name__ == "__main__":
     print(f"ITEM_CONFIDENCE_THRESHOLD: {ITEM_CONFIDENCE_THRESHOLD}")
     print(f"SEAT_CONFIDENCE_THRESHOLD: {SEAT_CONFIDENCE_THRESHOLD}")
     print(f"USE_PREPROCESSING: {USE_PREPROCESSING}")
+    print(f"VISUALIZE_RESULTS: {VISUALIZE_RESULTS}")
     print(f"ENABLE_TEST_UPSCALE: {ENABLE_TEST_UPSCALE}")
     print(f"MIN_TEST_IMAGE_SIDE: {MIN_TEST_IMAGE_SIDE}")
     if torch.cuda.is_available():
