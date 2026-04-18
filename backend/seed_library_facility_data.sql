@@ -438,18 +438,137 @@ where facilities.library_id = libraries.id
 
 
 -- Law Library Study Table
+with ranked_facilities as (
+    select
+        facilities.id,
+        row_number() over (order by facilities.room_code::int) - 1 as idx
+    from facilities
+    join libraries on libraries.id = facilities.library_id
+    where libraries.legacy_code = '6'
+      and facilities.facility_type_code = '23'
+)
+update facilities
+set
+    x_coordinate = 10 + (ranked_facilities.idx % 8) * 14,
+    y_coordinate = 10 + (ranked_facilities.idx / 8) * 14,
+    width = 10,
+    height = 10
+from ranked_facilities
+where facilities.id = ranked_facilities.id;
 
 -- Main Library Computer in LTC
+with ranked_facilities as (
+    select
+        facilities.id,
+        row_number() over (order by facilities.room_code::int) - 1 as idx
+    from facilities
+    join libraries on libraries.id = facilities.library_id
+    where libraries.legacy_code = '3'
+      and facilities.facility_type_code = '33'
+)
+update facilities
+set
+    x_coordinate = 10 + (ranked_facilities.idx % 4) * 18,
+    y_coordinate = 10 + (ranked_facilities.idx / 4) * 18,
+    width = 14,
+    height = 14
+from ranked_facilities
+where facilities.id = ranked_facilities.id;
 
 -- Main Library CC Room
+with ranked_facilities as (
+    select
+        facilities.id,
+        row_number() over (order by facilities.room_code::int) - 1 as idx
+    from facilities
+    join libraries on libraries.id = facilities.library_id
+    where libraries.legacy_code = '3'
+      and facilities.facility_type_code = '35'
+)
+update facilities
+set
+    x_coordinate = 10 + (ranked_facilities.idx % 3) * 22,
+    y_coordinate = 10 + (ranked_facilities.idx / 3) * 22,
+    width = 18,
+    height = 18
+from ranked_facilities
+where facilities.id = ranked_facilities.id;
 
 -- Main Library Single Study Room
+with ranked_facilities as (
+    select
+        facilities.id,
+        row_number() over (order by facilities.room_code::int) - 1 as idx
+    from facilities
+    join libraries on libraries.id = facilities.library_id
+    where libraries.legacy_code = '3'
+      and facilities.facility_type_code = '31'
+)
+update facilities
+set
+    x_coordinate = 10 + (ranked_facilities.idx % 4) * 20,
+    y_coordinate = 10 + (ranked_facilities.idx / 4) * 20,
+    width = 16,
+    height = 16
+from ranked_facilities
+where facilities.id = ranked_facilities.id;
 
 -- Main Library Studio and Editing Room
+with ranked_facilities as (
+    select
+        facilities.id,
+        row_number() over (order by facilities.room_code::int) - 1 as idx
+    from facilities
+    join libraries on libraries.id = facilities.library_id
+    where libraries.legacy_code = '3'
+      and facilities.facility_type_code = '34'
+)
+update facilities
+set
+    x_coordinate = 10 + ranked_facilities.idx * 24,
+    y_coordinate = 10,
+    width = 20,
+    height = 18
+from ranked_facilities
+where facilities.id = ranked_facilities.id;
 
 -- Main Library Study Table
+with ranked_facilities as (
+    select
+        facilities.id,
+        row_number() over (order by facilities.room_code::int) - 1 as idx
+    from facilities
+    join libraries on libraries.id = facilities.library_id
+    where libraries.legacy_code = '3'
+      and facilities.facility_type_code = '23'
+)
+update facilities
+set
+    x_coordinate = 10 + (ranked_facilities.idx % 8) * 14,
+    y_coordinate = 10 + (ranked_facilities.idx / 8) * 14,
+    width = 10,
+    height = 10
+from ranked_facilities
+where facilities.id = ranked_facilities.id;
 
 -- Medical Library Single Study Room
+with ranked_facilities as (
+    select
+        facilities.id,
+        row_number() over (order by facilities.room_code::int) - 1 as idx
+    from facilities
+    join libraries on libraries.id = facilities.library_id
+    where libraries.legacy_code = '8'
+      and facilities.facility_type_code = '30'
+)
+update facilities
+set
+    x_coordinate = 10 + (ranked_facilities.idx % 4) * 22,
+    y_coordinate = 10 + (ranked_facilities.idx / 4) * 22,
+    width = 18,
+    height = 18
+from ranked_facilities
+where facilities.id = ranked_facilities.id;
 
 insert into camera_sources (id, name, stream_url, location, area, enabled)
 values
